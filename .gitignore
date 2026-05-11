@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+.pytest_cache/
+
+# Node
+node_modules/
+.next/
+out/
+.turbo/
+
+# Environnement — JAMAIS dans le repo
+.env
+.env.local
+.env.production
+*.key
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+*Zone.Identifier*
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# Outputs agents
+outputs/
+
+# uv
+uv.lock
