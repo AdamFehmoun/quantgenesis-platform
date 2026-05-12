@@ -7,4 +7,6 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "sqlmodel>=0.0.22",
     "redis>=5.0",
+    "pandas>=3.0.3",
+    "requests>=2.34.0",
 ]
