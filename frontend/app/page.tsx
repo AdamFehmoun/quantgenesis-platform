@@ -1,7 +1,11 @@
+import Chat from "../components/Chat";
+
 export default function Home() {
   return (
-    <main className="flex min-h-screen items-center justify-center">
-      <h1 className="text-4xl font-bold">QuantGenesis</h1>
+    <main className="p-10">
+      <h1 className="text-2xl font-bold">QuantGenesis</h1>
+
+      <Chat />
     </main>
   );
 }
