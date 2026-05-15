@@ -1,40 +1,69 @@
 'use client';
 import { useState } from 'react';
 
+interface Metrics {
+  sharpe_ratio: number;
+  max_drawdown_pct: number;
+  total_return_pct: number;
+  num_trades: number;
+  win_rate_pct: number;
+}
+
+interface BacktestResult {
+  status: string;
+  strategy_name: string;
+  metrics: Metrics;
+}
+
 export default function Chat() {
   const [intent, setIntent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [result, setResult] = useState<string | null>(null);
+  const [result, setResult] = useState<BacktestResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleAnalyse = async () => {
     if (!intent.trim()) return;
     setLoading(true);
     setResult(null);
+    setError(null);
     try {
-      const res = await fetch('http://localhost:8000/api/pipeline/run', {
+      const res = await fetch('https://detached-twig-patriot.ngrok-free.dev/api/pipeline/run', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
         body: JSON.stringify({ intent })
       });
-      const data = await res.json();
-      setResult(JSON.stringify(data, null, 2));
+      const data: BacktestResult = await res.json();
+      setResult(data);
     } catch (err) {
-      setResult('Erreur : backend non disponible');
+      setError('Erreur : backend non disponible');
     } finally {
       setLoading(false);
     }
   };
 
+  const getWarning = (metrics: Metrics): string | null => {
+    if (metrics.sharpe_ratio > 5) return '⚠️ Sharpe > 5 — résultats suspects, possible overfitting';
+    if (metrics.max_drawdown_pct === 0) return '⚠️ Drawdown nul — vérifier les données';
+    if (metrics.num_trades < 5) return '⚠️ Trop peu de trades pour être significatif';
+    if (metrics.win_rate_pct > 90) return '⚠️ Win rate trop élevé — possible look-ahead bias';
+    return null;
+  };
+
   return (
     <div className="p-4 border rounded-lg max-w-xl mx-auto mt-5">
       <h2 className="text-xl font-bold mb-4">QuantGenesis</h2>
+
       <input
-        className="border p-2 flex-1 w-full mb-3 rounded"
+        className="border p-2 w-full mb-3 rounded"
         value={intent}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIntent(e.target.value)}
         placeholder="Décris ta stratégie en français..."
         disabled={loading}
       />
+
       <button
         onClick={handleAnalyse}
         disabled={loading}
@@ -57,10 +86,42 @@ export default function Chat() {
         </div>
       )}
 
+      {error && (
+        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       {result && (
-        <pre className="mt-4 p-3 bg-gray-100 rounded text-sm overflow-auto">
-          {result}
-        </pre>
+        <div className="mt-4">
+          <p className="text-sm text-gray-500 mb-3">
+            {result.strategy_name} — <span className="text-green-600 font-medium">{result.status}</span>
+          </p>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="border rounded p-3">
+              <p className="text-xs text-gray-400">Sharpe Ratio</p>
+              <p className="text-xl font-bold">{result.metrics.sharpe_ratio}</p>
+            </div>
+            <div className="border rounded p-3">
+              <p className="text-xs text-gray-400">Max Drawdown</p>
+              <p className="text-xl font-bold text-red-500">{result.metrics.max_drawdown_pct}%</p>
+            </div>
+            <div className="border rounded p-3">
+              <p className="text-xs text-gray-400">Total Return</p>
+              <p className="text-xl font-bold text-green-600">+{result.metrics.total_return_pct}%</p>
+            </div>
+            <div className="border rounded p-3">
+              <p className="text-xs text-gray-400">Win Rate</p>
+              <p className="text-xl font-bold">{result.metrics.win_rate_pct}%</p>
+            </div>
+          </div>
+
+          {getWarning(result.metrics) && (
+            <div className="p-3 bg-yellow-50 border border-yellow-300 rounded text-sm text-yellow-800">
+              {getWarning(result.metrics)}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
