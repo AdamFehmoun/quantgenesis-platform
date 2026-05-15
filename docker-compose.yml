@@ -9,8 +9,10 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - E2B_API_KEY=${E2B_API_KEY}
       - FMP_API_KEY=${FMP_API_KEY}
+      - AGENTS_PATH=/agents
     volumes:
       - ./backend:/app
+      - ../quantgenesis-agents:/agents:ro
     depends_on:
       - db
       - redis
