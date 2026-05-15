@@ -1,11 +1,12 @@
 import json
 import logging
 import os
-from typing import Union
+from typing import Any, Union
 
 import pandas as pd
 import redis
 import requests
+import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,34 @@ def get_ohlcv(symbol: str, interval: str, limit: int = 365) -> Union[pd.DataFram
             logger.warning("Cache write failed for %s: %s", key, exc)
 
     return df
+
+
+def get_ohlcv_yfinance(symbol: str, limit: int = 10) -> Union[dict[str, Any], str]:
+    """B-12: fetch US-equity OHLCV via yfinance, formatted to the canonical
+    {symbol, timeframe, data} contract. Returns an error string on failure."""
+    try:
+        hist = yf.Ticker(symbol).history(period="1mo", interval="1d", auto_adjust=False)
+    except Exception as exc:  # yfinance raises various network/parse errors
+        return f"yfinance error: {exc}"
+
+    if hist is None or hist.empty:
+        return f"No data returned for symbol {symbol!r}"
+
+    hist = hist.tail(limit)
+
+    records: list[dict[str, Any]] = []
+    for ts, row in hist.iterrows():
+        ts_utc = ts.tz_convert("UTC") if ts.tzinfo is not None else ts.tz_localize("UTC")
+        records.append({
+            "timestamp": ts_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "open": float(row["Open"]),
+            "high": float(row["High"]),
+            "low": float(row["Low"]),
+            "close": float(row["Close"]),
+            "volume": int(row["Volume"]),
+        })
+
+    return {"symbol": symbol, "timeframe": "1d", "data": records}
 
 
 if __name__ == "__main__":

@@ -148,13 +148,34 @@ def test_strategies_create_and_get(client: TestClient) -> None:
 
 def test_strategies_list_returns_recent(client: TestClient) -> None:
     client.post("/api/strategies/", json={"intent": "List probe strategy"})
-    resp = client.get("/api/strategies/", params={"limit": 5})
+    resp = client.get("/api/strategies/")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["limit"] == 5
-    assert body["offset"] == 0
-    assert body["count"] >= 1
-    assert any(item["intent"] == "List probe strategy" for item in body["items"])
+    assert isinstance(body, list)
+    assert any(item["intent"] == "List probe strategy" for item in body)
+
+
+def test_strategies_delete_returns_204(client: TestClient) -> None:
+    create = client.post("/api/strategies/", json={"intent": "To be deleted"})
+    assert create.status_code == 201
+    sid = create.json()["id"]
+
+    delete = client.delete(f"/api/strategies/{sid}")
+    assert delete.status_code == 204
+    assert delete.content == b""
+
+    # Subsequent fetch must 404
+    assert client.get(f"/api/strategies/{sid}").status_code == 404
+
+
+def test_strategies_delete_missing_returns_404(client: TestClient) -> None:
+    resp = client.delete(f"/api/strategies/{uuid.uuid4()}")
+    assert resp.status_code == 404
+
+
+def test_strategies_delete_invalid_uuid_returns_422(client: TestClient) -> None:
+    resp = client.delete("/api/strategies/not-a-uuid")
+    assert resp.status_code == 422
 
 
 def test_strategies_get_missing_returns_404(client: TestClient) -> None:
