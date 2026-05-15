@@ -12,7 +12,8 @@ services:
       - AGENTS_PATH=/agents
     volumes:
       - ./backend:/app
-      - ../quantgenesis-agents:/agents:ro
+      - ./sandbox:/app/sandbox
+      - ../quantgenesis-agents:/agents
     depends_on:
       - db
       - redis
@@ -23,10 +24,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - NEXT_PUBLIC_API_URL=https://detached-twig-patriot.ngrok-free.dev
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    command: npm run dev
     depends_on:
       - backend
 

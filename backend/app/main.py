@@ -16,7 +16,7 @@ app = FastAPI(title="QuantGenesis Backend", lifespan=lifespan)
 
 app.include_router(pipeline.router)
 app.include_router(data.router)
-app.include_router(strategies.router)
+app.include_router(strategies.router, prefix="/api/strategies", tags=["Strategies"])
 
 
 @app.get("/health")
