@@ -33,14 +33,30 @@ export default function Chat() {
         value={intent}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIntent(e.target.value)}
         placeholder="Décris ta stratégie en français..."
+        disabled={loading}
       />
       <button
         onClick={handleAnalyse}
         disabled={loading}
-        className="bg-blue-500 text-white px-4 py-2 rounded w-full"
+        className="bg-blue-500 text-white px-4 py-2 rounded w-full disabled:opacity-50"
       >
-        {loading ? 'Analyse en cours...' : 'Analyser →'}
+        {loading ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            Analyse en cours...
+          </span>
+        ) : 'Analyser →'}
       </button>
+
+      {loading && (
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+          ⏳ Pipeline IA en cours — résultats dans ~30 secondes
+        </div>
+      )}
+
       {result && (
         <pre className="mt-4 p-3 bg-gray-100 rounded text-sm overflow-auto">
           {result}
