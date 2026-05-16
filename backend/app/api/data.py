@@ -1,8 +1,8 @@
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.services.data_service import get_ohlcv
+from app.services.data_service import get_ohlcv, get_ohlcv_yfinance
 
 router = APIRouter(prefix="/api/data", tags=["data"])
 
@@ -12,7 +12,14 @@ def ohlcv(
     symbol: str = Query("BTCUSDT"),
     interval: str = Query("1d"),
     limit: int = Query(10, ge=1, le=1000),
+    source: Literal["binance", "yfinance"] = Query("binance"),
 ) -> dict[str, Any]:
+    if source == "yfinance":
+        result = get_ohlcv_yfinance(symbol, limit)
+        if isinstance(result, str):
+            raise HTTPException(status_code=502, detail=result)
+        return result
+
     result = get_ohlcv(symbol, interval, limit)
     if isinstance(result, str):
         raise HTTPException(status_code=502, detail=result)
