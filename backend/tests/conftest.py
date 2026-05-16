@@ -5,8 +5,21 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.rate_limit import limiter
 from app.main import app
 from app.services import data_service
+
+
+@pytest.fixture(autouse=True)
+def _disable_rate_limit() -> None:
+    """slowapi shares a single in-memory bucket per (key, route) across the
+    whole pytest session, which causes spurious 429s once multiple tests hit
+    the same rate-limited endpoint. Disable for tests; rate-limit behaviour is
+    covered by a dedicated curl-based check, not pytest."""
+    previous = limiter.enabled
+    limiter.enabled = False
+    yield
+    limiter.enabled = previous
 
 
 _BINANCE_FIXTURE_ROWS = [

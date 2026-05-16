@@ -13,6 +13,7 @@ dependencies = [
     "yfinance>=0.2.40",
     "python-dotenv>=1.0.0",
     "e2b-code-interpreter>=1.0.0",
+    "slowapi>=0.1.9",
 ]
 
 [dependency-groups]

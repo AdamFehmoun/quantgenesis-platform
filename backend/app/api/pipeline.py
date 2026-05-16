@@ -3,10 +3,11 @@ import os
 import sys
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlmodel import Session
 
 from app.core.db import get_session
+from app.core.rate_limit import limiter
 from app.models.strategy import Strategy
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,9 @@ def _build_metrics(backtest_result: dict[str, Any] | None) -> dict[str, float | 
 
 
 @router.post("/run")
+@limiter.limit("5/hour")
 def run_pipeline(
+    request: Request,
     payload: dict[str, Any] = Body(...),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:

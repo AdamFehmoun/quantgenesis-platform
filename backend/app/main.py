@@ -1,9 +1,14 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from app.api import data, pipeline, strategies
 from app.core.db import init_db
+from app.core.rate_limit import limiter
+from app.core.request_logging import RequestLoggingMiddleware
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -11,6 +16,24 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="QuantGenesis Backend", lifespan=lifespan)
+
+app.state.limiter = limiter
+
+
+async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "rate_limit_exceeded",
+            "detail": f"Rate limit exceeded: {exc.detail}. Please retry later.",
+        },
+        headers={"Retry-After": "3600"},
+    )
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
