@@ -1,25 +1,74 @@
+import ast
 import time
 from dotenv import load_dotenv
 from e2b_code_interpreter import Sandbox
 
-# Charge la clé E2B depuis le fichier .env caché
 load_dotenv(dotenv_path="sandbox/.env")
 
-def run_backtest(code: str, timeout: int = 30) -> dict:
+def verify_code_safety(code: str) -> tuple[bool, str]:
     """
-    Exécute le code IA dans la sandbox avec le template custom ultra-rapide.
-    Gère les timeouts, le manque de RAM (OOM) et les crashs de code.
+    Analyse l'arbre syntaxique (AST) pour bloquer les imports dangereux (os, subprocess, socket)
+    et les fonctions d'évasion de chaînes (eval, exec, etc.).
     """
-    start_time = time.time()
+    BLOCKED_MODULES = {'os', 'subprocess', 'socket', 'sys', 'shutil', 'requests', 'urllib'}
+    BLOCKED_FUNCTIONS = {'eval', 'exec', '__import__', 'compile', 'open'}
     
     try:
-        # ⚡ C'EST ICI LA MAGIE : On utilise ton image pré-installée !
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        return False, f"Erreur de syntaxe : {e}"
+
+    class SecurityChecker(ast.NodeVisitor):
+        def __init__(self):
+            self.is_safe = True
+            self.reason = ""
+
+        def visit_Import(self, node):
+            for alias in node.names:
+                if alias.name.split('.')[0] in BLOCKED_MODULES:
+                    self.is_safe = False
+                    self.reason = f"Import interdit détecté : '{alias.name}'"
+            self.generic_visit(node)
+
+        def visit_ImportFrom(self, node):
+            if node.module and node.module.split('.')[0] in BLOCKED_MODULES:
+                self.is_safe = False
+                self.reason = f"Import combiné interdit détecté : 'from {node.module}'"
+            self.generic_visit(node)
+
+        def visit_Call(self, node):
+            if isinstance(node.func, ast.Name) and node.func.id in BLOCKED_FUNCTIONS:
+                self.is_safe = False
+                self.reason = f"Appel de fonction système interdit : '{node.func.id}()'"
+            elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+                if node.func.value.id in BLOCKED_MODULES:
+                    self.is_safe = False
+                    self.reason = f"Appel de méthode interdit sur le module banni : '{node.func.value.id}'"
+            self.generic_visit(node)
+
+    checker = SecurityChecker()
+    checker.visit(tree)
+    return checker.is_safe, checker.reason
+
+def run_backtest(code: str, timeout: int = 30) -> dict:
+    start_time = time.time()
+    
+    # 🛡️ Barrière locale : Filtrage AST
+    is_safe, reason = verify_code_safety(code)
+    if not is_safe:
+        return {
+            'status': 'ERROR',
+            'error': 'security_violation',
+            'details': reason,
+            'execution_time_ms': 0
+        }
+    
+    try:
         with Sandbox.create("ptdq4y2y6jburj1tjjff") as s:
+            # ⏱️ Limite stricte des 30 secondes appliquée ici
             execution = s.run_code(code, timeout=timeout)
-            
             execution_time_ms = int((time.time() - start_time) * 1000)
 
-            # 1. GESTION DU CRASH DE CODE OU OUT OF MEMORY (OOM)
             if execution.error:
                 error_name = execution.error.name
                 error_value = execution.error.value
@@ -28,7 +77,7 @@ def run_backtest(code: str, timeout: int = 30) -> dict:
                     return {
                         'status': 'ERROR',
                         'error': 'out_of_memory',
-                        'details': 'La sandbox a manqué de RAM',
+                        'details': 'La sandbox a manqué de RAM (limite 512MB active).',
                         'execution_time_ms': execution_time_ms
                     }
                 
@@ -40,80 +89,41 @@ def run_backtest(code: str, timeout: int = 30) -> dict:
                 }
 
             stdout_text = execution.text if hasattr(execution, 'text') and execution.text else ""
-            
-            sharpe = 0.0
-            drawdown = 0.0
-            total_return = 0.0
-            
-            # Parsing du stdout
-            if stdout_text:
-                for line in stdout_text.split('\n'):
-                    if line.startswith('SHARPE:'):
-                        try: sharpe = float(line.split(':')[1])
-                        except ValueError: pass
-                    elif line.startswith('DRAWDOWN:'):
-                        try: drawdown = float(line.split(':')[1]) * 100
-                        except ValueError: pass
-                    elif line.startswith('RETURN:'):
-                        try: total_return = float(line.split(':')[1]) * 100
-                        except ValueError: pass
-
             return {
                 'status': 'SUCCESS',
-                'sharpe_ratio': round(sharpe, 2),
-                'max_drawdown_pct': round(drawdown, 2),
-                'total_return_pct': round(total_return, 2),
-                'num_trades': 0, 
-                'execution_time_ms': execution_time_ms,
                 'stdout': stdout_text,
-                'stderr': "".join(execution.logs.stderr) if hasattr(execution.logs, 'stderr') and execution.logs.stderr else ""
+                'execution_time_ms': execution_time_ms
             }
 
-    # 2. GESTION DU TIMEOUT
     except TimeoutError:
         return {
             'status': 'ERROR', 
             'error': 'timeout_30s',
+            'details': 'Dépassement du timeout de 30 secondes.',
             'execution_time_ms': int((time.time() - start_time) * 1000)
         }
-    
-    # 3. GESTION DES ERREURS SYSTÈMES
     except Exception as e:
-        error_str = str(e).lower()
-        if "timeout" in error_str:
-            return {
-                'status': 'ERROR', 
-                'error': 'timeout_30s',
-                'execution_time_ms': int((time.time() - start_time) * 1000)
-            }
-        return {
-            'status': 'ERROR',
-            'error': 'system_error',
-            'details': str(e),
-            'execution_time_ms': int((time.time() - start_time) * 1000)
-        }
+        if "timeout" in str(e).lower():
+            return {'status': 'ERROR', 'error': 'timeout_30s', 'execution_time_ms': int((time.time() - start_time) * 1000)}
+        return {'status': 'ERROR', 'error': 'system_error', 'details': str(e), 'execution_time_ms': int((time.time() - start_time) * 1000)}
 
 if __name__ == "__main__":
-    print("⏳ Test rapide de l'executor (Happy Path)...")
-    # Code de test ultra-léger, car vectorbt et pandas sont déjà dans ton template !
-    code_test = '''
-import vectorbt as vbt
-import yfinance as yf
-import warnings
-warnings.filterwarnings('ignore')
+    print("🛡️ Lancement du banc d'essai de sécurité (10 cas d'injection) 🛡️\n")
+    
+    injections = {
+        "1. Import Classique OS": "import os\nos.system('rm -rf /')",
+        "2. Import Classique Subprocess": "import subprocess\nsubprocess.run(['ls'])",
+        "3. Import Classique Socket": "import socket\ns = socket.socket()",
+        "4. From...Import Déguisé": "from os import system\nsystem('clear')",
+        "5. Exécution dynamique via eval()": "eval('__import__(\"os\").system(\"id\")')",
+        "6. Exécution de bloc via exec()": "exec('import os')",
+        "7. Lecture de fichier sensible": "open('/etc/passwd', 'r')",
+        "8. Import caché de fonction": "__import__('subprocess').getoutput('whoami')",
+        "9. Concaténation de module (Obfuscation)": "mod = 's' + 'ocket'\n__import__(mod).gethostname()",
+        "10. Tentative d'accès réseau interdit (Google)": "import urllib.request\nurllib.request.urlopen('https://google.com')"
+    }
 
-data = yf.download('BTC-USD', period='6mo', progress=False)
-close = data['Close'].squeeze()
-rsi = vbt.RSI.run(close, window=14)
-entries = rsi.rsi_below(30).shift(1).fillna(False)
-exits = rsi.rsi_above(70).shift(1).fillna(False)
-
-pf = vbt.Portfolio.from_signals(
-    close, entries=entries, exits=exits,
-    fees=0.001, slippage=0.001, freq='1D'
-)
-print(f'SHARPE:{float(pf.sharpe_ratio()):.4f}')
-print(f'DRAWDOWN:{float(pf.max_drawdown()):.4f}')
-print(f'RETURN:{float(pf.total_return()):.4f}')
-'''
-    print(run_backtest(code_test))
+    for nom, code_test in injections.items():
+        print(f"Testing: {nom}")
+        resultat = run_backtest(code_test)
+        print(f"Result -> Status: {resultat.get('status')} | Error/Violation: {resultat.get('error') or resultat.get('details')}\n")
