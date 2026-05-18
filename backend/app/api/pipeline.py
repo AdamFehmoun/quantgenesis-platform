@@ -25,6 +25,26 @@ _STATUS_MAP = {"SUCCESS": "success", "REJECTED": "rejected", "ERROR": "error"}
 
 _METRIC_KEYS = ("sharpe_ratio", "max_drawdown_pct", "total_return_pct", "num_trades", "win_rate_pct")
 
+# B-S2-01 — Cost model: spread varies by asset class. Equity markets are deep
+# and tight (~1 bp); crypto venues have wider quotes (~5 bp). Defaults to the
+# equity value when no crypto signal is found in the intent.
+_SPREAD_EQUITY_US = 0.0001
+_SPREAD_CRYPTO = 0.0005
+
+_CRYPTO_TOKENS = frozenset({
+    "btc", "eth", "sol", "bnb", "xrp", "ada", "doge", "dot", "avax", "matic",
+    "ltc", "bch", "link", "atom", "trx", "usdt", "usdc", "busd",
+    "bitcoin", "ethereum", "crypto", "altcoin", "binance", "coinbase",
+})
+
+
+def _resolve_spread(intent: str) -> float:
+    """Pick a spread based on the asset class hinted by the intent."""
+    tokens = {tok.strip(".,:;!?()[]{}\"'").lower() for tok in intent.split()}
+    if tokens & _CRYPTO_TOKENS:
+        return _SPREAD_CRYPTO
+    return _SPREAD_EQUITY_US
+
 
 def _run_agents_pipeline(intent: str) -> dict[str, Any]:
     """Lazy bridge to the agents repo `run_pipeline`."""
@@ -43,7 +63,7 @@ def _run_agents_pipeline(intent: str) -> dict[str, Any]:
     return _agents_run_pipeline(intent, verbose=False)
 
 
-def _run_sandbox_backtest(code: str) -> dict[str, Any]:
+def _run_sandbox_backtest(code: str, spread: float = _SPREAD_EQUITY_US) -> dict[str, Any]:
     """Lazy bridge to Mathis' sandbox executor. Isolated for testability."""
     try:
         from sandbox.executor import run_backtest as _run_backtest  # type: ignore[import-not-found]
@@ -52,6 +72,9 @@ def _run_sandbox_backtest(code: str) -> dict[str, Any]:
         return {"status": "ERROR", "stderr": f"sandbox.executor import failed: {exc}"}
 
     try:
+        return _run_backtest(code, spread=spread)
+    except TypeError:
+        # Older executor signatures predate the spread kwarg; fall back gracefully.
         return _run_backtest(code)
     except Exception as exc:  # executor wraps errors but never trust an external module
         logger.warning("sandbox.executor raised: %s", exc)
@@ -96,6 +119,9 @@ def run_pipeline(
     compliance_log = pipeline_result.get("compliance_log")
     status = _STATUS_MAP.get(raw_status, "error")
 
+    spread = _resolve_spread(intent)
+    backtest_params = {"spread": spread}
+
     # B-SANDBOX: dispatch the generated code to Mathis' E2B executor when the
     # agents approved the spec. Skip on REJECTED to avoid burning sandbox time.
     backtest_result: dict[str, Any] | None = None
@@ -106,16 +132,20 @@ def run_pipeline(
             or ""
         )
         if code:
-            backtest_result = _run_sandbox_backtest(code)
+            backtest_result = _run_sandbox_backtest(code, spread=spread)
         else:
             logger.warning("No claude_code_instructions returned by agents; skipping backtest.")
 
     metrics = _build_metrics(backtest_result)
 
+    strategy_payload: dict[str, Any] = {"metrics": metrics, "backtest_params": backtest_params}
+    if pipeline_result:
+        strategy_payload = {**pipeline_result, **strategy_payload}
+
     strategy = Strategy(
         intent=intent,
         status=status,
-        result_json={**pipeline_result, "metrics": metrics} if pipeline_result else {"metrics": metrics},
+        result_json=strategy_payload,
     )
     session.add(strategy)
     session.commit()
@@ -130,6 +160,8 @@ def run_pipeline(
         "compliance_log": compliance_log,
         "metrics": metrics,
         "backtest": backtest_result,
+        "backtest_params": backtest_params,
+        "spread": spread,
         "error": error_message,
         "pipeline": pipeline_result,
     }

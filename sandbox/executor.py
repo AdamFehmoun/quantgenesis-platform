@@ -50,9 +50,9 @@ def verify_code_safety(code: str) -> tuple[bool, str]:
     checker.visit(tree)
     return checker.is_safe, checker.reason
 
-def run_backtest(code: str, timeout: int = 30) -> dict:
+def run_backtest(code: str, timeout: int = 30, spread: float = 0.0001) -> dict:
     start_time = time.time()
-    
+
     # 🛡️ Barrière locale : Filtrage AST
     is_safe, reason = verify_code_safety(code)
     if not is_safe:
@@ -62,11 +62,14 @@ def run_backtest(code: str, timeout: int = 30) -> dict:
             'details': reason,
             'execution_time_ms': 0
         }
-    
+
+    # B-S2-01: expose the cost model to the executed strategy code as `SPREAD`.
+    instrumented_code = f"SPREAD = {float(spread)!r}\n{code}"
+
     try:
         with Sandbox.create("ptdq4y2y6jburj1tjjff") as s:
             # ⏱️ Limite stricte des 30 secondes appliquée ici
-            execution = s.run_code(code, timeout=timeout)
+            execution = s.run_code(instrumented_code, timeout=timeout)
             execution_time_ms = int((time.time() - start_time) * 1000)
 
             if execution.error:
