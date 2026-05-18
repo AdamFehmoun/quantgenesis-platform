@@ -1,6 +1,7 @@
 import Chat from "../components/Chat";
 import PerformanceChart from "../components/PerformanceChart";
 import WhiteBox from "../components/WhiteBox";
+import AuditTrail from "../components/AuditTrail";
 
 export default function Home() {
   return (
@@ -9,6 +10,7 @@ export default function Home() {
       <Chat />
       <PerformanceChart />
       <WhiteBox />
+      <AuditTrail />
     </main>
   );
 }
