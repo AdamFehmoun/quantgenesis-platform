@@ -101,6 +101,44 @@ def fake_redis(monkeypatch: pytest.MonkeyPatch) -> _FakeRedis:
 
 
 @pytest.fixture
+def fake_yfinance(monkeypatch: pytest.MonkeyPatch) -> dict[str, int]:
+    """B-12 (J8): mock yfinance so SPY/AAPL pytest never hits the network.
+
+    Returns a counter so tests can assert how many times yf.Ticker was called.
+    The fake DataFrame mimics yfinance's native shape (DatetimeIndex named
+    'Date', columns Open/High/Low/Close/Volume) so get_ohlcv_yfinance exercises
+    its real normalization path.
+    """
+    counter = {"calls": 0}
+
+    def _build_history(limit: int = 10) -> pd.DataFrame:
+        idx = pd.date_range("2026-01-01", periods=limit, freq="D", tz="America/New_York", name="Date")
+        return pd.DataFrame(
+            {
+                "Open": [400.0 + i for i in range(limit)],
+                "High": [402.5 + i for i in range(limit)],
+                "Low": [399.0 + i for i in range(limit)],
+                "Close": [401.0 + i for i in range(limit)],
+                "Volume": [1_000_000 + i * 1000 for i in range(limit)],
+            },
+            index=idx,
+        )
+
+    class _FakeTicker:
+        def __init__(self, symbol: str) -> None:
+            self.symbol = symbol
+
+        def history(self, period: str = "1mo", interval: str = "1d", **_: Any) -> pd.DataFrame:
+            counter["calls"] += 1
+            # Return 21 trading days so the .tail(limit) slice in the service
+            # path actually exercises the trimming logic.
+            return _build_history(limit=21)
+
+    monkeypatch.setattr(data_service.yf, "Ticker", _FakeTicker)
+    return counter
+
+
+@pytest.fixture
 def fake_binance(monkeypatch: pytest.MonkeyPatch) -> dict[str, int]:
     counter = {"calls": 0}
 

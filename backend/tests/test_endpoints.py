@@ -104,6 +104,48 @@ def test_ohlcv_cache_miss_then_hit(
     assert elapsed_ms < 50, f"cache hit too slow: {elapsed_ms:.2f}ms"
 
 
+# ─────────────────────────────────────────────
+# B-12 (J8) — yfinance dispatch for US equities
+# ─────────────────────────────────────────────
+
+_OHLCV_CANDLE_KEYS = {"timestamp", "open", "high", "low", "close", "volume"}
+
+
+def test_ohlcv_yfinance_spy_auto_routed(
+    client: TestClient,
+    fake_yfinance,
+) -> None:
+    """SPY symbol auto-routes to yfinance and emits the Binance JSON shape."""
+    resp = client.get("/api/data/ohlcv", params={"symbol": "SPY", "limit": 10})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+
+    assert body["symbol"] == "SPY"
+    assert body["source"] == "yfinance"
+    assert body["count"] == 10
+    assert len(body["candles"]) == 10
+    candle = body["candles"][0]
+    missing = _OHLCV_CANDLE_KEYS - set(candle.keys())
+    assert not missing, f"candle missing required keys: {sorted(missing)}"
+    assert candle["timestamp"].endswith("Z"), "timestamp must be UTC ISO8601 with Z suffix"
+    assert isinstance(candle["open"], float)
+    assert isinstance(candle["volume"], (int, float))
+    assert fake_yfinance["calls"] == 1, "yfinance should be hit exactly once"
+
+
+def test_ohlcv_btcusdt_still_routes_to_binance(
+    client: TestClient,
+    fake_binance,
+    fake_redis,
+) -> None:
+    """Regression: crypto pairs (USDT suffix) still hit Binance, never yfinance."""
+    resp = client.get("/api/data/ohlcv", params={"symbol": "BTCUSDT", "limit": 3})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["source"] == "binance"
+    assert fake_binance["calls"] == 1
+
+
 def test_ohlcv_binance_error_502(
     client: TestClient,
     fake_redis,
@@ -264,3 +306,115 @@ def test_strategies_get_invalid_uuid_returns_422(client: TestClient) -> None:
 def test_strategies_post_missing_intent_returns_422(client: TestClient) -> None:
     resp = client.post("/api/strategies/", json={})
     assert resp.status_code == 422
+
+
+# ─────────────────────────────────────────────
+# B-S2-05 — GET /api/logs (observability for demo)
+# ─────────────────────────────────────────────
+
+_REQUIRED_LOG_KEYS = {
+    "id",
+    "client_ip",
+    "method",
+    "path",
+    "status_code",
+    "execution_time_seconds",
+    "created_at",
+}
+
+
+def test_logs_returns_recent_requests_with_full_contract(client: TestClient) -> None:
+    """GET /api/logs must surface the last requests with the 7 demo fields."""
+    # Generate some traffic so the middleware persists rows. Middleware writes
+    # in a starlette BackgroundTask after the response returns; TestClient drives
+    # that task synchronously in-process.
+    client.get("/health")
+    client.get("/api/strategies/")
+
+    resp = client.get("/api/logs?limit=10")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert isinstance(body, list)
+    assert body, "logs list should be non-empty after seed traffic"
+    assert len(body) <= 10, "limit must cap the result set"
+
+    # Each row exposes the full contract
+    sample = body[0]
+    missing = _REQUIRED_LOG_KEYS - set(sample.keys())
+    assert not missing, f"log row missing keys: {sorted(missing)}"
+    assert isinstance(sample["execution_time_seconds"], (int, float))
+    assert sample["execution_time_seconds"] >= 0
+    assert sample["created_at"].count("T") == 1, "created_at must be ISO8601"
+
+    # Order: created_at DESC — the head is the most recent timestamp
+    timestamps = [row["created_at"] for row in body]
+    assert timestamps == sorted(timestamps, reverse=True), "logs must be DESC by created_at"
+
+
+def test_logs_respects_limit_query_param(client: TestClient) -> None:
+    # Spam a few cheap GETs to ensure at least 3 rows in the table
+    for _ in range(3):
+        client.get("/health")
+    resp = client.get("/api/logs?limit=2")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) <= 2
+
+
+# ─────────────────────────────────────────────
+# B-DEMO — 3 sequential pipeline runs (stability for the Lilian demo)
+# ─────────────────────────────────────────────
+
+def test_pipeline_run_three_consecutive_runs_stay_stable(
+    client: TestClient,
+    stub_agents_pipeline,
+    monkeypatch,
+) -> None:
+    """Three sequential POSTs must each succeed and persist a strategy row.
+
+    Acceptance: backend doesn't crash, no connection leak, every response
+    carries a populated final_spec + metrics envelope (Railway-grade stability).
+    """
+    from app.api import pipeline as pipeline_api
+
+    monkeypatch.setattr(
+        pipeline_api,
+        "_run_sandbox_backtest",
+        lambda code, spread=0.0001: {
+            "status": "SUCCESS",
+            "sharpe_ratio": 1.10,
+            "max_drawdown_pct": -5.0,
+            "total_return_pct": 12.5,
+            "num_trades": 9,
+            "win_rate_pct": 55.5,
+        },
+    )
+
+    intents = [
+        "RSI Bitcoin breakout",
+        "Mean reversion ETH 1h",
+        "Momentum SPY drawdown 8%",
+    ]
+    ids: list[str] = []
+
+    for intent in intents:
+        resp = client.post("/api/pipeline/run", json={"intent": intent})
+        assert resp.status_code == 200, f"intent={intent!r} -> {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "success"
+        assert body["intent"] == intent
+        assert isinstance(body.get("final_spec"), dict) and body["final_spec"], (
+            f"intent={intent!r} returned empty final_spec"
+        )
+        assert body["metrics"]["sharpe_ratio"] == 1.10
+        ids.append(body["id"])
+
+    # Every run produced a distinct persisted strategy id
+    assert len(set(ids)) == 3, f"expected 3 unique strategy ids, got {ids}"
+
+    # Strategies table is reachable right after the burst — proves no leaked
+    # session / dangling transaction from the loop.
+    listed = client.get("/api/strategies/")
+    assert listed.status_code == 200
+    listed_ids = {item["id"] for item in listed.json()}
+    assert set(ids).issubset(listed_ids), "all three runs must be persisted"
