@@ -75,6 +75,24 @@ def _reset_redis_singleton() -> None:
     data_service._redis_client = None
 
 
+@pytest.fixture(autouse=True)
+def _stub_sandbox_backtest_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never let pytest touch the real E2B sandbox.
+
+    The default stub returns an ERROR envelope so tests that don't care about
+    metrics still observe pipeline.py's zero-metric fallback. Tests that need
+    a SUCCESS backtest (e.g. test_e2e_pipeline.py) install their own override
+    via the `stub_sandbox_backtest` fixture, which monkeypatch happily replaces.
+    """
+    from app.api import pipeline as pipeline_api
+
+    monkeypatch.setattr(
+        pipeline_api,
+        "_run_sandbox_backtest",
+        lambda code, spread=0.0001: {"status": "ERROR", "stderr": "sandbox stubbed in tests"},
+    )
+
+
 @pytest.fixture
 def fake_redis(monkeypatch: pytest.MonkeyPatch) -> _FakeRedis:
     fake = _FakeRedis()

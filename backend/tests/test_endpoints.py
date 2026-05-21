@@ -155,6 +155,79 @@ def test_strategies_list_returns_recent(client: TestClient) -> None:
     assert any(item["intent"] == "List probe strategy" for item in body)
 
 
+# ─────────────────────────────────────────────
+# B-S2-02 — GET / list shape: id, intent, status, created_at, metrics
+# ─────────────────────────────────────────────
+
+_REQUIRED_LIST_KEYS = {"id", "intent", "status", "created_at", "metrics"}
+_REQUIRED_METRICS_KEYS = {
+    "sharpe_ratio",
+    "max_drawdown_pct",
+    "total_return_pct",
+    "num_trades",
+    "win_rate_pct",
+}
+
+
+def test_strategies_list_item_has_required_fields(client: TestClient) -> None:
+    """Every listed strategy must expose the contract Maxime depends on."""
+    metrics_blob = {
+        "sharpe_ratio": 1.85,
+        "max_drawdown_pct": -7.4,
+        "total_return_pct": 31.2,
+        "num_trades": 22,
+        "win_rate_pct": 61.1,
+    }
+    client.post(
+        "/api/strategies/",
+        json={
+            "intent": "B-S2-02 contract probe",
+            "status": "success",
+            "result_json": {"metrics": metrics_blob, "final_spec": {"strategy_name": "x"}},
+        },
+    )
+
+    resp = client.get("/api/strategies/")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert isinstance(body, list) and body, "list must be non-empty after seed"
+
+    probe = next(
+        (item for item in body if item.get("intent") == "B-S2-02 contract probe"),
+        None,
+    )
+    assert probe is not None, "seeded strategy missing from list response"
+
+    # contract: all 5 top-level keys present on every list item
+    missing = _REQUIRED_LIST_KEYS - set(probe.keys())
+    assert not missing, f"list item missing keys: {sorted(missing)}"
+
+    # metrics: full 5-key block, populated from result_json.metrics
+    assert isinstance(probe["metrics"], dict)
+    missing_metrics = _REQUIRED_METRICS_KEYS - set(probe["metrics"].keys())
+    assert not missing_metrics, f"metrics missing keys: {sorted(missing_metrics)}"
+    assert probe["metrics"]["sharpe_ratio"] == 1.85
+    assert probe["metrics"]["num_trades"] == 22
+
+
+def test_strategies_list_item_defaults_metrics_when_absent(client: TestClient) -> None:
+    """Legacy rows without a metrics block must still expose zeroed metrics."""
+    client.post(
+        "/api/strategies/",
+        json={"intent": "B-S2-02 no-metrics probe", "result_json": {"other": "data"}},
+    )
+    resp = client.get("/api/strategies/")
+    assert resp.status_code == 200
+    body = resp.json()
+    probe = next(
+        (item for item in body if item.get("intent") == "B-S2-02 no-metrics probe"),
+        None,
+    )
+    assert probe is not None
+    assert set(probe["metrics"].keys()) == _REQUIRED_METRICS_KEYS
+    assert all(v in (0, 0.0) for v in probe["metrics"].values())
+
+
 def test_strategies_delete_returns_204(client: TestClient) -> None:
     create = client.post("/api/strategies/", json={"intent": "To be deleted"})
     assert create.status_code == 201

@@ -10,13 +10,49 @@ from app.models.strategy import Strategy
 router = APIRouter()
 
 
+_EMPTY_METRICS: dict[str, float | int] = {
+    "sharpe_ratio": 0.0,
+    "max_drawdown_pct": 0.0,
+    "total_return_pct": 0.0,
+    "num_trades": 0,
+    "win_rate_pct": 0.0,
+}
+
+
+def _extract_metrics(result_json: Any) -> dict[str, float | int]:
+    """Surface the metrics block stored under result_json.metrics.
+
+    B-S2-02: the frontend history view must render metrics without null-checks,
+    so we always return the canonical 5-key contract — falling back to zeros
+    when a strategy was persisted before the metrics field existed.
+    """
+    if isinstance(result_json, dict):
+        metrics = result_json.get("metrics")
+        if isinstance(metrics, dict):
+            return {**_EMPTY_METRICS, **metrics}
+    return dict(_EMPTY_METRICS)
+
+
 def _serialize(strategy: Strategy) -> dict[str, Any]:
     return {
         "id": str(strategy.id),
         "intent": strategy.intent,
         "status": strategy.status,
         "result_json": strategy.result_json,
+        "metrics": _extract_metrics(strategy.result_json),
         "created_at": strategy.created_at.isoformat(),
+    }
+
+
+def _serialize_list_item(strategy: Strategy) -> dict[str, Any]:
+    """Compact shape for GET / — no result_json blob, just the contract Maxime
+    needs to render the history grid."""
+    return {
+        "id": str(strategy.id),
+        "intent": strategy.intent,
+        "status": strategy.status,
+        "created_at": strategy.created_at.isoformat(),
+        "metrics": _extract_metrics(strategy.result_json),
     }
 
 
@@ -44,12 +80,15 @@ def create_strategy(
     return _serialize(strategy)
 
 
-@router.get("/", response_model=list[Strategy])
+@router.get("/")
 def list_strategies(
     session: Session = Depends(get_session),
-) -> list[Strategy]:
+) -> list[dict[str, Any]]:
+    """B-S2-02: return every persisted strategy with id, intent, status,
+    created_at and the canonical metrics object — what the frontend needs
+    for the history panel."""
     stmt = select(Strategy).order_by(Strategy.created_at.desc())
-    return session.exec(stmt).all()
+    return [_serialize_list_item(s) for s in session.exec(stmt).all()]
 
 
 @router.get("/{strategy_id}")
