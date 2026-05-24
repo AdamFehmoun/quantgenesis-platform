@@ -42,3 +42,4 @@ outputs/
 
 # uv
 uv.lock
+*.Zone.Identifier
