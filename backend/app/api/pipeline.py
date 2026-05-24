@@ -48,8 +48,14 @@ def _resolve_spread(intent: str) -> float:
 
 def _run_agents_pipeline(intent: str) -> dict[str, Any]:
     """Lazy bridge to the agents repo `run_pipeline`."""
-    agents_path = os.getenv("AGENTS_PATH", "/home/berkant/quantgenesis-agents")
-    if agents_path and agents_path not in sys.path:
+    import sys
+    import os
+    # Ajoute /app au path pour que 'from agents.brainstormer' fonctionne
+    agents_path = os.environ.get("AGENTS_PATH", "/app/agents")
+    app_root = os.path.dirname(agents_path)  # /app
+    if app_root not in sys.path:
+        sys.path.insert(0, app_root)
+    if agents_path not in sys.path:
         sys.path.insert(0, agents_path)
 
     try:
