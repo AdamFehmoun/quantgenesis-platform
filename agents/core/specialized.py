@@ -4,7 +4,7 @@ Tous héritent de BaseAgent — même interface, même logging.
 """
 import os
 from datetime import datetime, timezone
-from agents.base import BaseAgent
+from agents.core.base import BaseAgent
 
 
 class ChefProjetAgent(BaseAgent):

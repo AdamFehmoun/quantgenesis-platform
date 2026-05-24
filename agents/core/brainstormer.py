@@ -7,7 +7,7 @@ Rôle : transformer une intention vague en spécification claire
 Il ne code JAMAIS. Il clarifie, enrichit, anticipe.
 """
 import os
-from agents.base import BaseAgent
+from agents.core.base import BaseAgent
 
 
 class BrainstormerAgent(BaseAgent):

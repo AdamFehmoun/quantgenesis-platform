@@ -14,8 +14,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from agents.brainstormer import BrainstormerAgent
-from agents.specialized import (
+from agents.core.brainstormer import BrainstormerAgent
+from agents.core.specialized import (
     ChefProjetAgent,
     ArchitecteAgent,
     CritiqueAgent,
