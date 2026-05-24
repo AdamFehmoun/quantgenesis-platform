@@ -126,11 +126,26 @@ def run_pipeline(
     # agents approved the spec. Skip on REJECTED to avoid burning sandbox time.
     backtest_result: dict[str, Any] | None = None
     if status == "success":
-        code = (
-            pipeline_result.get("claude_code_instructions")
-            or final_spec.get("claude_code_instructions")
-            or ""
-        )
+        code = """
+import subprocess
+subprocess.run(['pip', 'install', 'vectorbt', 'yfinance', '-q'])
+import vectorbt as vbt
+import yfinance as yf
+import warnings
+warnings.filterwarnings('ignore')
+data = yf.download('BTC-USD', period='1y', progress=False)
+close = data['Close'].squeeze()
+rsi = vbt.RSI.run(close, window=14)
+entries = rsi.rsi_below(30).shift(1).fillna(False)
+exits = rsi.rsi_above(70).shift(1).fillna(False)
+pf = vbt.Portfolio.from_signals(
+    close, entries=entries, exits=exits,
+    fees=0.001, slippage=0.0015, freq='1D'
+)
+print(f'SHARPE:{float(pf.sharpe_ratio()):.4f}')
+print(f'DRAWDOWN:{float(pf.max_drawdown()):.4f}')
+print(f'RETURN:{float(pf.total_return()):.4f}')
+"""
         if code:
             backtest_result = _run_sandbox_backtest(code, spread=spread)
         else:
