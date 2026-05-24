@@ -13,6 +13,7 @@ RUN uv pip install --system --no-cache -r pyproject.toml \
 # `from sandbox.executor import run_backtest` resolves because /app is on sys.path.
 COPY backend/ .
 COPY sandbox/ ./sandbox/
+COPY agents/ ./agents/
 
 # Shell form so $PORT is expanded at container runtime. `exec` replaces the
 # shell with uvicorn so SIGTERM from Railway/Docker reaches uvicorn directly
