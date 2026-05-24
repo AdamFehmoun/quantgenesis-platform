@@ -133,8 +133,6 @@ def run_pipeline(
     backtest_result: dict[str, Any] | None = None
     if status == "success":
         code = """
-import subprocess
-subprocess.run(['pip', 'install', 'vectorbt', 'yfinance', '-q'])
 import vectorbt as vbt
 import yfinance as yf
 import warnings
