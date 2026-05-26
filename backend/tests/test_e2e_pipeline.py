@@ -37,7 +37,7 @@ def stub_sandbox_backtest(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(
         pipeline_api,
         "_run_sandbox_backtest",
-        lambda code: dict(canned_result),
+        lambda code, spread=0.0001: dict(canned_result),
     )
     return canned_result
 
@@ -100,6 +100,54 @@ def test_pipeline_run_non_string_intent_returns_422(client: TestClient) -> None:
     """Non-string intent (int) → 422, no crash."""
     resp = client.post("/api/pipeline/run", json={"intent": 42})
     assert resp.status_code == 422, resp.text
+
+
+def test_pipeline_run_spread_crypto(
+    client: TestClient,
+    stub_agents_pipeline: dict,
+    stub_sandbox_backtest: dict,
+) -> None:
+    """Crypto-flavoured intent → spread = 0.0005, surfaced in backtest_params."""
+    resp = client.post("/api/pipeline/run", json={"intent": "RSI on BTC and ETH"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["backtest_params"] == {"spread": 0.0005}
+    assert body["spread"] == 0.0005
+
+
+def test_pipeline_run_spread_us_equity(
+    client: TestClient,
+    stub_agents_pipeline: dict,
+    stub_sandbox_backtest: dict,
+) -> None:
+    """US equity intent → spread = 0.0001 (default equity cost)."""
+    resp = client.post("/api/pipeline/run", json={"intent": "Momentum on AAPL and SPY"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["backtest_params"] == {"spread": 0.0001}
+    assert body["spread"] == 0.0001
+
+
+def test_pipeline_run_passes_spread_to_executor(
+    client: TestClient,
+    stub_agents_pipeline: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The resolved spread must be forwarded to the sandbox executor call."""
+    from app.api import pipeline as pipeline_api
+
+    captured: dict[str, Any] = {}
+
+    def _spy(code: str, spread: float = 0.0001) -> dict[str, Any]:
+        captured["code"] = code
+        captured["spread"] = spread
+        return {"status": "SUCCESS"}
+
+    monkeypatch.setattr(pipeline_api, "_run_sandbox_backtest", _spy)
+
+    resp = client.post("/api/pipeline/run", json={"intent": "Bitcoin breakout"})
+    assert resp.status_code == 200, resp.text
+    assert captured["spread"] == 0.0005
 
 
 def test_pipeline_run_agents_error_returns_500(

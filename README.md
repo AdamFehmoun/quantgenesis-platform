@@ -1,36 +1,40 @@
-# QuantGenesis Platform
+﻿# QuantGenesis Platform
 
-> Infrastructure de méta-trading "White-Box" pilotée par agents IA et sécurisée par isolation matérielle.
+> **White-Box meta-trading infrastructure** — translates natural-language strategy descriptions into auditable, executable Python code via an AI multi-agent pipeline, with hardware-isolated execution for safety.
 
 ## Vision
 
-QuantGenesis permet de convertir une intention stratégique en langage naturel en code Python complexe, auditable et exportable. L'utilisateur décrit sa stratégie, la plateforme génère, backteste et optimise le code sous-jacent dans un environnement sécurisé conforme à l'AI Act européen.
+QuantGenesis turns strategic intent expressed in natural language into complex, auditable, exportable Python code. The user describes their strategy; the platform generates, backtests and optimizes the underlying code in a secure environment compliant with the EU AI Act.
 
 ```
-"Stratégie momentum Bitcoin, drawdown max 10%"
+"Momentum strategy on Bitcoin, max drawdown 10%"
                     ↓
-        Pipeline IA multi-agents
+       Multi-agent AI pipeline (5 specialized agents)
                     ↓
-    Code VectorBT généré + audité
+       Audited VectorBT code generated
                     ↓
-    Backtest vectorisé en < 30 secondes
+       Vectorized backtest in < 30 seconds
                     ↓
-    Export White-Box + Log conformité AI Act
+       White-Box export + AI Act compliance log
 ```
 
-## Stack Technique
+## Why "White-Box"
 
-| Couche | Technologie | Rôle |
+Most "AI trading bots" on the market are black boxes: users trust the output without visibility into the logic, the data, or the failure modes. QuantGenesis inverts this: every AI decision in the pipeline is logged, scored, and contestable, in alignment with **EU AI Act Article 12** (record-keeping requirements for high-risk AI systems).
+
+## Tech Stack
+
+| Layer | Technology | Role |
 |--------|------------|------|
-| Backend | FastAPI + Python 3.11 | API transactionnelle |
-| Frontend | Next.js 14 + Tailwind | Dashboard de supervision |
-| Backtesting | VectorBT Pro | Moteur quantitatif vectorisé |
-| Sandbox | E2B (Firecracker MicroVM) | Exécution sécurisée du code |
-| Base de données | PostgreSQL (Supabase) | Persistance + historique |
-| Cache | Redis (Upstash) | Cache données financières |
-| Données | FMP + Alpaca | Flux historiques + paper trading |
-| IA | Gemini Pro + Claude | Pipeline d'agents spécialisés |
-| Infra | Docker + GitHub Actions | CI/CD + déploiement |
+| Backend | FastAPI · Python 3.11 | Transactional API |
+| Frontend | Next.js 14 · TypeScript · Tailwind | Supervision dashboard |
+| Backtesting | VectorBT | Vectorized quantitative engine |
+| Sandbox | E2B (Firecracker MicroVM) | Hardware-isolated code execution |
+| Database | PostgreSQL (Supabase) | Persistence + history |
+| Cache | Redis (Upstash) | Financial data cache |
+| Data | yfinance · Binance API | Historical equities + crypto |
+| AI Agents | Claude Opus 4.x (Anthropic) | Multi-agent pipeline |
+| Deployment | Docker · Railway · Vercel | CI/CD + production hosting |
 
 ## Architecture
 
@@ -38,119 +42,96 @@ QuantGenesis permet de convertir une intention stratégique en langage naturel e
 quantgenesis-platform/
 ├── backend/
 │   └── app/
-│       ├── api/          # Endpoints FastAPI
-│       ├── agents/       # Intégration pipeline agents
-│       ├── models/       # Modèles SQLModel
-│       └── services/     # Logique métier (backtest, data, sandbox)
+│       ├── api/          # FastAPI endpoints
+│       ├── agents/       # AI pipeline integration (vendored from quantgenesis-agents)
+│       ├── models/       # SQLModel persistence layer
+│       └── services/     # Business logic (backtest, data, sandbox)
 ├── frontend/
 │   └── src/
-│       ├── components/   # Composants React réutilisables
-│       ├── pages/        # Pages Next.js
+│       ├── components/   # Reusable React components
+│       ├── pages/        # Next.js pages
 │       └── hooks/        # Custom hooks
-├── sandbox/              # Configuration E2B
-├── data/                 # Pipelines données FMP/Alpaca
+├── sandbox/              # E2B configuration + custom Dockerfile
+├── data/                 # yfinance + Binance data pipelines
 ├── docs/
 │   └── adr/              # Architecture Decision Records
 └── .github/
     └── workflows/        # CI/CD GitHub Actions
 ```
 
-## Équipe
+## The Multi-Agent Pipeline
 
-| Membre | Filière | Rôle | Ownership |
-|--------|---------|------|-----------|
-| Adam Fehmoun | E3S | Chef de Projet + Lead IA | `/backend/app/agents/` |
-| Paul Legeais | E3S | Lead Quant + IA | `/backend/app/agents/` |
-| Berkant Baskin | E3FD | Lead Backend + Data | `/backend/app/api/` `/data/` |
-| Mathis Gibouin | E3FD | Sandbox + Sécurité | `/sandbox/` |
-| Maxime Pierrard | E3E | Lead Frontend + Finance | `/frontend/` |
+QuantGenesis decomposes strategy generation into five specialized AI agents, each with a single responsibility:
 
-## Démarrage rapide
+1. **Brainstormer** — explores strategy variants from the user's natural-language intent
+2. **Project Lead** — selects the most promising variant and frames the technical brief
+3. **Architect** — generates the VectorBT specification (entry/exit rules, assets, sizing)
+4. **Critic** — reviews the spec for look-ahead bias, leakage, unrealistic assumptions
+5. **Compliance** — produces the EU AI Act Article 12 audit log for the entire pipeline
 
-### Prérequis
+Each step is versioned, logged, and traceable. Average cost per run: **~0.86€**.
+
+## Quickstart
+
+### Prerequisites
 - Python 3.11+
 - Node.js 18+
 - Docker + Docker Compose
-- uv (gestionnaire de paquets Python)
+- `uv` (Python package manager)
 
 ### Installation
 
 ```bash
-# 1. Cloner le repo
+# Clone
 git clone https://github.com/AdamFehmoun/quantgenesis-platform
 cd quantgenesis-platform
 
-# 2. Backend
+# Backend
 cd backend
 uv venv --python 3.11
 source .venv/bin/activate
 uv sync
 
-# 3. Frontend
+# Frontend
 cd ../frontend
 npm install
 
-# 4. Variables d'environnement
+# Environment
 cp .env.example .env
-# Remplir les valeurs (voir Adam pour les clés)
+# Fill in API keys (Anthropic, E2B, Binance, Supabase)
 
-# 5. Lancer l'environnement complet
+# Run the full stack
 docker compose up
 ```
 
-## Workflow Git
+## Compliance
 
-```bash
-# Toujours partir de main à jour
-git checkout main && git pull
+QuantGenesis natively integrates EU AI Act requirements (Article 12 — record-keeping) via a dedicated compliance agent that automatically generates traceability logs for each AI decision. This makes the platform deployable in regulated financial environments where AI-generated code must be auditable end-to-end.
 
-# Créer sa branche
-git checkout -b feat/nom-de-la-feature
+## Project Context
 
-# Commiter régulièrement
-git commit -m "feat(backend): add backtest endpoint"
+Academic project conducted at **ESIEE Paris** (M.Eng program, 2025–2026 cohort) under the supervision of **Lilian Buzer**. Built by a team of 5 engineering students. Production deployment on Railway, frontend on Vercel.
 
-# Ouvrir une PR → review obligatoire avant merge
-```
+## Roadmap
 
-### Convention de commits
-
-```
-feat(scope):     nouvelle fonctionnalité
-fix(scope):      correction de bug
-refactor(scope): refactoring sans changement fonctionnel
-docs(scope):     documentation
-test(scope):     ajout/modification de tests
-chore(scope):    maintenance, dépendances
-```
-
-Scopes : `backend` `frontend` `sandbox` `data` `agents` `infra`
-
-## Règles d'équipe
-
-- **Standup** posté sur Discord avant midi chaque jour
-- **Règle des 30 min** : bloqué → #blocages immédiatement
-- **Pas de push direct sur main** — toujours une PR reviewée
-- **Secrets uniquement dans Infisical** — jamais dans le code
-- **Feature freeze semaine 6** — zéro nouvelle feature après S6
-- **Tests passent** avant d'ouvrir une PR
-
-## Jalons
-
-| Semaine | Livrable |
+| Phase | Milestone |
 |---------|----------|
-| S1 | CLI end-to-end fonctionnel |
-| S2 | 1re stratégie backtestée live |
-| S3 | Alpha interne — Black-Litterman + HRP |
-| S4 | Conformité AI Act + Walk-forward |
-| S5 | Beta — Paper trading Alpaca |
-| S6 | Feature freeze — démo prête |
-| S7 | Jour des Projets (25 juin) + Soutenance |
+| S1 | End-to-end CLI functional ✅ |
+| S2 | First live backtested strategy ✅ |
+| S3 | Internal alpha — Black-Litterman + HRP |
+| S4 | EU AI Act compliance layer + Walk-forward validation |
+| S5 | Beta — Paper trading integration |
+| S6 | Feature freeze — demo-ready |
+| S7 | Public release (June 25, 2026) |
 
-## Conformité
+## Contributing
 
-QuantGenesis intègre nativement les exigences de l'AI Act européen (Article 12) via un agent de conformité dédié qui génère automatiquement les logs de traçabilité pour chaque décision IA.
+Project currently in pre-release. Contribution guidelines in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+## License
+
+To be determined before public release (target: MIT).
 
 ---
 
-*Projet E3 ESIEE Paris 2025-2026 — Université Gustave Eiffel*
+*ESIEE Paris · M.Eng Data Science & AI · 2025–2026*

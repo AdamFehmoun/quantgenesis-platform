@@ -75,11 +75,67 @@ def _reset_redis_singleton() -> None:
     data_service._redis_client = None
 
 
+@pytest.fixture(autouse=True)
+def _stub_sandbox_backtest_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never let pytest touch the real E2B sandbox.
+
+    The default stub returns an ERROR envelope so tests that don't care about
+    metrics still observe pipeline.py's zero-metric fallback. Tests that need
+    a SUCCESS backtest (e.g. test_e2e_pipeline.py) install their own override
+    via the `stub_sandbox_backtest` fixture, which monkeypatch happily replaces.
+    """
+    from app.api import pipeline as pipeline_api
+
+    monkeypatch.setattr(
+        pipeline_api,
+        "_run_sandbox_backtest",
+        lambda code, spread=0.0001: {"status": "ERROR", "stderr": "sandbox stubbed in tests"},
+    )
+
+
 @pytest.fixture
 def fake_redis(monkeypatch: pytest.MonkeyPatch) -> _FakeRedis:
     fake = _FakeRedis()
     monkeypatch.setattr(data_service, "_get_redis", lambda: fake)
     return fake
+
+
+@pytest.fixture
+def fake_yfinance(monkeypatch: pytest.MonkeyPatch) -> dict[str, int]:
+    """B-12 (J8): mock yfinance so SPY/AAPL pytest never hits the network.
+
+    Returns a counter so tests can assert how many times yf.Ticker was called.
+    The fake DataFrame mimics yfinance's native shape (DatetimeIndex named
+    'Date', columns Open/High/Low/Close/Volume) so get_ohlcv_yfinance exercises
+    its real normalization path.
+    """
+    counter = {"calls": 0}
+
+    def _build_history(limit: int = 10) -> pd.DataFrame:
+        idx = pd.date_range("2026-01-01", periods=limit, freq="D", tz="America/New_York", name="Date")
+        return pd.DataFrame(
+            {
+                "Open": [400.0 + i for i in range(limit)],
+                "High": [402.5 + i for i in range(limit)],
+                "Low": [399.0 + i for i in range(limit)],
+                "Close": [401.0 + i for i in range(limit)],
+                "Volume": [1_000_000 + i * 1000 for i in range(limit)],
+            },
+            index=idx,
+        )
+
+    class _FakeTicker:
+        def __init__(self, symbol: str) -> None:
+            self.symbol = symbol
+
+        def history(self, period: str = "1mo", interval: str = "1d", **_: Any) -> pd.DataFrame:
+            counter["calls"] += 1
+            # Return 21 trading days so the .tail(limit) slice in the service
+            # path actually exercises the trimming logic.
+            return _build_history(limit=21)
+
+    monkeypatch.setattr(data_service.yf, "Ticker", _FakeTicker)
+    return counter
 
 
 @pytest.fixture

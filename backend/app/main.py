@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from app.api import data, pipeline, strategies
+from app.api import data, logs, pipeline, strategies
 from app.core.db import init_db
 from app.core.rate_limit import limiter
 from app.core.request_logging import RequestLoggingMiddleware
@@ -56,6 +56,7 @@ async def preflight_handler(rest_of_path: str):
 
 app.include_router(pipeline.router)
 app.include_router(data.router)
+app.include_router(logs.router)
 app.include_router(strategies.router, prefix="/api/strategies", tags=["Strategies"])
 
 @app.get("/health")

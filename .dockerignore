@@ -1,0 +1,30 @@
+.git
+.github
+.gitignore
+
+# Python
+**/__pycache__
+**/*.pyc
+**/.venv
+**/.pytest_cache
+**/.coverage
+**/.mypy_cache
+**/.ruff_cache
+
+# Node / frontend (excluded entirely from backend builds)
+frontend/node_modules
+frontend/.next
+frontend/out
+
+# Local env / IDE
+.env
+.env.*
+!.env.example
+.vscode
+.idea
+.DS_Store
+
+# Docs / CI artefacts
+docs
+*.md
+!README.md

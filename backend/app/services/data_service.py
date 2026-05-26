@@ -84,9 +84,11 @@ def get_ohlcv(symbol: str, interval: str, limit: int = 365) -> Union[pd.DataFram
     return df
 
 
-def get_ohlcv_yfinance(symbol: str, limit: int = 10) -> Union[dict[str, Any], str]:
-    """B-12: fetch US-equity OHLCV via yfinance, formatted to the canonical
-    {symbol, timeframe, data} contract. Returns an error string on failure."""
+def get_ohlcv_yfinance(symbol: str, limit: int = 10) -> Union[pd.DataFrame, str]:
+    """B-12 (J8): fetch US-equity OHLCV via yfinance and return a DataFrame
+    with the SAME schema as get_ohlcv (Binance): columns
+    [timestamp(UTC), open, high, low, close, volume]. The endpoint formats
+    timestamps uniformly so the JSON wire shape matches Binance exactly."""
     try:
         hist = yf.Ticker(symbol).history(period="1mo", interval="1d", auto_adjust=False)
     except Exception as exc:  # yfinance raises various network/parse errors
@@ -95,21 +97,23 @@ def get_ohlcv_yfinance(symbol: str, limit: int = 10) -> Union[dict[str, Any], st
     if hist is None or hist.empty:
         return f"No data returned for symbol {symbol!r}"
 
-    hist = hist.tail(limit)
+    df = hist.tail(limit).reset_index()
 
-    records: list[dict[str, Any]] = []
-    for ts, row in hist.iterrows():
-        ts_utc = ts.tz_convert("UTC") if ts.tzinfo is not None else ts.tz_localize("UTC")
-        records.append({
-            "timestamp": ts_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "open": float(row["Open"]),
-            "high": float(row["High"]),
-            "low": float(row["Low"]),
-            "close": float(row["Close"]),
-            "volume": int(row["Volume"]),
-        })
+    # yfinance uses 'Date' (daily) or 'Datetime' (intraday) as index name.
+    rename = {}
+    for src in ("Date", "Datetime", "date", "datetime"):
+        if src in df.columns:
+            rename[src] = "timestamp"
+            break
+    for src in ("Open", "High", "Low", "Close", "Volume"):
+        rename[src] = src.lower()
+    df = df.rename(columns=rename)
 
-    return {"symbol": symbol, "timeframe": "1d", "data": records}
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.as_unit("ns")
+    df = df[["timestamp", "open", "high", "low", "close", "volume"]]
+    for col in ("open", "high", "low", "close", "volume"):
+        df[col] = pd.to_numeric(df[col])
+    return df
 
 
 if __name__ == "__main__":
