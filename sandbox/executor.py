@@ -52,16 +52,12 @@ def verify_code_safety(code: str) -> tuple[bool, str]:
     checker.visit(tree)
     return checker.is_safe, checker.reason
 
-<<<<<<< HEAD
 
-def run_backtest(code: str, timeout: int = 30) -> dict:
+def run_backtest(code: str, timeout: int = 30, spread: float = 0.0001) -> dict:
     """
     Exécute le code IA dans la sandbox E2B avec le template financier pré-installé.
     Gère la sécurité locale, les timeouts, les crashs et la saturation mémoire.
     """
-=======
-def run_backtest(code: str, timeout: int = 30, spread: float = 0.0001) -> dict:
->>>>>>> 63fa12b2b195400fa9322ad3f6e217f4c1fbe3f1
     start_time = time.time()
 
     # 🛡️ Barrière locale : Filtrage AST
@@ -80,12 +76,8 @@ def run_backtest(code: str, timeout: int = 30, spread: float = 0.0001) -> dict:
     try:
         # Configuration des ressources managée via e2b.toml (1 core, 512MB RAM)
         with Sandbox.create("ptdq4y2y6jburj1tjjff") as s:
-<<<<<<< HEAD
-            execution = s.run_code(code, timeout=timeout)
-=======
-            # ⏱️ Limite stricte des 30 secondes appliquée ici
+            # ⏱️ Limite stricte des 30 secondes appliquée ici sur le code instrumenté par Adam
             execution = s.run_code(instrumented_code, timeout=timeout)
->>>>>>> 63fa12b2b195400fa9322ad3f6e217f4c1fbe3f1
             execution_time_ms = int((time.time() - start_time) * 1000)
 
             if execution.error:
