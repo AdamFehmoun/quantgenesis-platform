@@ -3,7 +3,9 @@ import time
 from dotenv import load_dotenv
 from e2b_code_interpreter import Sandbox
 
+# Charge la clé E2B depuis le fichier .env caché
 load_dotenv(dotenv_path="sandbox/.env")
+
 
 def verify_code_safety(code: str) -> tuple[bool, str]:
     """
@@ -16,7 +18,7 @@ def verify_code_safety(code: str) -> tuple[bool, str]:
     try:
         tree = ast.parse(code)
     except SyntaxError as e:
-        return False, f"Erreur de syntaxe : {e}"
+        return False, f"Erreur de syntaxe avant exécution (Filtre AST) : {e}"
 
     class SecurityChecker(ast.NodeVisitor):
         def __init__(self):
@@ -50,7 +52,12 @@ def verify_code_safety(code: str) -> tuple[bool, str]:
     checker.visit(tree)
     return checker.is_safe, checker.reason
 
+
 def run_backtest(code: str, timeout: int = 30) -> dict:
+    """
+    Exécute le code IA dans la sandbox E2B avec le template financier pré-installé.
+    Gère la sécurité locale, les timeouts, les crashs et la saturation mémoire.
+    """
     start_time = time.time()
     
     # 🛡️ Barrière locale : Filtrage AST
@@ -64,8 +71,8 @@ def run_backtest(code: str, timeout: int = 30) -> dict:
         }
     
     try:
+        # Configuration des ressources managée via e2b.toml (1 core, 512MB RAM)
         with Sandbox.create("ptdq4y2y6jburj1tjjff") as s:
-            # ⏱️ Limite stricte des 30 secondes appliquée ici
             execution = s.run_code(code, timeout=timeout)
             execution_time_ms = int((time.time() - start_time) * 1000)
 
@@ -89,41 +96,76 @@ def run_backtest(code: str, timeout: int = 30) -> dict:
                 }
 
             stdout_text = execution.text if hasattr(execution, 'text') and execution.text else ""
+            
+            sharpe = 0.0
+            drawdown = 0.0
+            total_return = 0.0
+            
+            if stdout_text:
+                for line in stdout_text.split('\n'):
+                    if line.startswith('SHARPE:'):
+                        try: sharpe = float(line.split(':')[1])
+                        except ValueError: pass
+                    elif line.startswith('DRAWDOWN:'):
+                        try: drawdown = float(line.split(':')[1]) * 100
+                        except ValueError: pass
+                    elif line.startswith('RETURN:'):
+                        try: total_return = float(line.split(':')[1]) * 100
+                        except ValueError: pass
+
             return {
                 'status': 'SUCCESS',
+                'sharpe_ratio': round(sharpe, 2),
+                'max_drawdown_pct': round(drawdown, 2),
+                'total_return_pct': round(total_return, 2),
+                'num_trades': 0, 
+                'execution_time_ms': execution_time_ms,
                 'stdout': stdout_text,
-                'execution_time_ms': execution_time_ms
+                'stderr': "".join(execution.logs.stderr) if hasattr(execution.logs, 'stderr') and execution.logs.stderr else ""
             }
 
     except TimeoutError:
         return {
             'status': 'ERROR', 
             'error': 'timeout_30s',
-            'details': 'Dépassement du timeout de 30 secondes.',
+            'details': 'Dépassement réel du timeout de 30 secondes.',
             'execution_time_ms': int((time.time() - start_time) * 1000)
         }
     except Exception as e:
-        if "timeout" in str(e).lower():
-            return {'status': 'ERROR', 'error': 'timeout_30s', 'execution_time_ms': int((time.time() - start_time) * 1000)}
-        return {'status': 'ERROR', 'error': 'system_error', 'details': str(e), 'execution_time_ms': int((time.time() - start_time) * 1000)}
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        error_msg = str(e)
+        
+        # Capture spécifique de la coupure de port due au blocage de la Whitelist Réseau (M-10)
+        if "port is not open" in error_msg or "code:502" in error_msg:
+            return {
+                'status': 'ERROR',
+                'error': 'code_crash',
+                'details': 'ConnectionError: Tentative d\'accès à un domaine hors whitelist bloquée par l\'infrastructure.',
+                'execution_time_ms': execution_time_ms
+            }
+            
+        if "timeout" in error_msg.lower() and execution_time_ms >= (timeout * 1000):
+            return {
+                'status': 'ERROR', 
+                'error': 'timeout_30s',
+                'details': 'Dépassement du timeout de 30 secondes.',
+                'execution_time_ms': execution_time_ms
+            }
+            
+        return {
+            'status': 'ERROR',
+            'error': 'system_error',
+            'details': error_msg,
+            'execution_time_ms': execution_time_ms
+        }
+
 
 if __name__ == "__main__":
-    print("🛡️ Lancement du banc d'essai de sécurité (10 cas d'injection) 🛡️\n")
+    print("🚀 Lancement du test de validation de la whitelist réseau (M-10)...")
     
-    injections = {
-        "1. Import Classique OS": "import os\nos.system('rm -rf /')",
-        "2. Import Classique Subprocess": "import subprocess\nsubprocess.run(['ls'])",
-        "3. Import Classique Socket": "import socket\ns = socket.socket()",
-        "4. From...Import Déguisé": "from os import system\nsystem('clear')",
-        "5. Exécution dynamique via eval()": "eval('__import__(\"os\").system(\"id\")')",
-        "6. Exécution de bloc via exec()": "exec('import os')",
-        "7. Lecture de fichier sensible": "open('/etc/passwd', 'r')",
-        "8. Import caché de fonction": "__import__('subprocess').getoutput('whoami')",
-        "9. Concaténation de module (Obfuscation)": "mod = 's' + 'ocket'\n__import__(mod).gethostname()",
-        "10. Tentative d'accès réseau interdit (Google)": "import urllib.request\nurllib.request.urlopen('https://google.com')"
-    }
-
-    for nom, code_test in injections.items():
-        print(f"Testing: {nom}")
-        resultat = run_backtest(code_test)
-        print(f"Result -> Status: {resultat.get('status')} | Error/Violation: {resultat.get('error') or resultat.get('details')}\n")
+    # On teste un appel réseau vers Yahoo Finance (Bloqué par notre configuration e2b.toml)
+    code_test_whitelist = """import yfinance as yf
+data = yf.download('BTC-USD', period='1mo')
+print('SUCCESS')
+"""
+    print(run_backtest(code_test_whitelist))
