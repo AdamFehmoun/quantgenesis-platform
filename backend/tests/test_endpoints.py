@@ -372,10 +372,15 @@ def test_pipeline_run_three_consecutive_runs_stay_stable(
 ) -> None:
     """Three sequential POSTs must each succeed and persist a strategy row.
 
-    Acceptance: backend doesn't crash, no connection leak, every response
-    carries a populated final_spec + metrics envelope (Railway-grade stability).
+    Acceptance: backend doesn't crash, no connection leak, no thread leak, every
+    response carries a populated final_spec + metrics envelope (Railway-grade
+    stability for the Lilian demo).
     """
+    import threading
+    import time
+
     from app.api import pipeline as pipeline_api
+    from app.core.db import engine
 
     monkeypatch.setattr(
         pipeline_api,
@@ -395,10 +400,19 @@ def test_pipeline_run_three_consecutive_runs_stay_stable(
         "Mean reversion ETH 1h",
         "Momentum SPY drawdown 8%",
     ]
+
+    # Baselines BEFORE the burst — anything still elevated afterwards is a leak.
+    pool_before = engine.pool.checkedout()
+    threads_before = threading.active_count()
+
     ids: list[str] = []
+    latencies_ms: list[float] = []
 
     for intent in intents:
+        t0 = time.perf_counter()
         resp = client.post("/api/pipeline/run", json={"intent": intent})
+        latencies_ms.append((time.perf_counter() - t0) * 1_000)
+
         assert resp.status_code == 200, f"intent={intent!r} -> {resp.status_code}: {resp.text}"
         body = resp.json()
         assert body["status"] == "success"
@@ -407,10 +421,30 @@ def test_pipeline_run_three_consecutive_runs_stay_stable(
             f"intent={intent!r} returned empty final_spec"
         )
         assert body["metrics"]["sharpe_ratio"] == 1.10
+        # B-S2-01 contract must hold under burst load too
+        assert "backtest_params" in body and "spread" in body["backtest_params"]
         ids.append(body["id"])
 
     # Every run produced a distinct persisted strategy id
     assert len(set(ids)) == 3, f"expected 3 unique strategy ids, got {ids}"
+
+    # B-DEMO: every run must complete fast on the demo path (stubbed sandbox).
+    # The 5 s ceiling is generous — any single run blowing past it means
+    # something is blocking on shared state (lock, connection wait, GC stall).
+    assert max(latencies_ms) < 5_000, f"latency spike detected: {latencies_ms}"
+
+    # ── DB pool: no checked-out connection should survive the burst ──
+    pool_after = engine.pool.checkedout()
+    assert pool_after <= pool_before, (
+        f"connection leak: pool.checkedout went from {pool_before} → {pool_after}"
+    )
+
+    # ── Threads: the request-logging BackgroundTask must not leak workers ──
+    # Allow a small drift (±2) for the test runner's own bookkeeping threads.
+    threads_after = threading.active_count()
+    assert threads_after <= threads_before + 2, (
+        f"thread leak: active_count went from {threads_before} → {threads_after}"
+    )
 
     # Strategies table is reachable right after the burst — proves no leaked
     # session / dangling transaction from the loop.
@@ -418,3 +452,13 @@ def test_pipeline_run_three_consecutive_runs_stay_stable(
     assert listed.status_code == 200
     listed_ids = {item["id"] for item in listed.json()}
     assert set(ids).issubset(listed_ids), "all three runs must be persisted"
+
+    # ── Observability: /api/logs surfaces the three POSTs we just issued ──
+    # (B-S2-05 sanity check piggy-backed on the burst, since the middleware
+    # writes via a Starlette BackgroundTask which TestClient flushes inline.)
+    logs_resp = client.get("/api/logs?limit=50")
+    assert logs_resp.status_code == 200
+    log_paths = [row["path"] for row in logs_resp.json()]
+    assert log_paths.count("/api/pipeline/run") >= 3, (
+        f"expected ≥3 /api/pipeline/run rows in logs, got paths={log_paths}"
+    )
