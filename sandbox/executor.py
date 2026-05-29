@@ -99,7 +99,7 @@ def run_backtest(code: str, timeout: int = 30, spread: float = 0.0001) -> dict:
                     'execution_time_ms': execution_time_ms
                 }
 
-            stdout_text = execution.text if hasattr(execution, 'text') and execution.text else ""
+            stdout_text = "".join(execution.logs.stdout) if execution.logs and execution.logs.stdout else ""
             
             sharpe = 0.0
             drawdown = 0.0
