@@ -27,11 +27,10 @@ export default function Chat() {
     setResult(null);
     setError(null);
     try {
-      const res = await fetch('https://detached-twig-patriot.ngrok-free.dev/api/pipeline/run', {
+      const res = await fetch('https://quantgenesis-platform-production.up.railway.app/api/pipeline/run', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': '69420'
         },
         body: JSON.stringify({ intent })
       });
