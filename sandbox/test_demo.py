@@ -20,7 +20,16 @@ for i in range(5):
     r = run_backtest(CODE_TEST)
     
     # Enregistrement dans la base de données (M-14)
-    log_execution(r)
+    # À la ligne 23, remplace log_execution(r) par :
+
+    log_execution(
+        status=r.get("status", "ERROR"),
+        execution_time_ms=r.get("execution_time_ms", 0),
+        memory_used_mb=r.get("memory_used_mb", 0.0), # Si tu n'as pas la RAM, mets 0.0
+        code_hash=r.get("code_hash", "hash_inconnu"), # Ou la variable contenant ton hash
+        sharpe_ratio=r.get("sharpe_ratio", 0.0),
+        error_type=r.get("error", None)
+    )
     
     status = r.get('status')
     sharpe = r.get('sharpe_ratio', 'N/A')
