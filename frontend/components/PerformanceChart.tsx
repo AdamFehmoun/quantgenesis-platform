@@ -1,19 +1,8 @@
 'use client';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine
-} from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 // ============================================================
-// DONNÉES MOCK — à remplacer par les vraies données de Berkant
-// Ces données viendront de : BacktestResult.chart_data
-// Format attendu : { date: string, value: number, drawdown: number }[]
+// DONNÉES MOCK — à remplacer par BacktestResult.chart_data
 // ============================================================
 const MOCK_DATA = [
   { date: '2024-01', value: 100, drawdown: 0 },
@@ -30,57 +19,37 @@ const MOCK_DATA = [
   { date: '2024-12', value: 135, drawdown: 0 },
 ];
 
-// ============================================================
-// QUAND BERKANT EST CONNECTÉ :
-// Remplace MOCK_DATA par la prop data reçue depuis Chat.tsx
-// Change l'interface pour accepter : { data: typeof MOCK_DATA }
-// ============================================================
+const tooltipStyle = { background: '#1a1c24', border: '1px solid #2a2a2a', borderRadius: 8, color: '#fff', fontSize: 12 };
 
 export default function PerformanceChart() {
   return (
-    <div className="mt-6 border rounded-lg p-4">
+    <div style={{background: '#16181F', border: '1px solid #2a2a2a'}} className="rounded-xl p-6">
+      <h3 className="text-white font-semibold mb-1">Performance du portefeuille</h3>
+      <p className="text-xs mb-6" style={{color: '#666'}}>Equity curve — données mock</p>
 
-      {/* Graphique performance */}
-      <h3 className="text-sm font-semibold text-gray-600 mb-3">
-        Performance du portefeuille
-      </h3>
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={180}>
         <LineChart data={MOCK_DATA}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip />
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke="#22c55e"
-            strokeWidth={2}
-            dot={false}
-          />
+          <CartesianGrid strokeDasharray="3 3" stroke="#1e2028" />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#555' }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fontSize: 10, fill: '#555' }} axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={tooltipStyle} />
+          <Line type="monotone" dataKey="value" stroke="#1D9E75" strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
 
-      {/* Graphique drawdown */}
-      <h3 className="text-sm font-semibold text-gray-600 mt-6 mb-3">
-        Drawdown
-      </h3>
+      <h3 className="text-white font-semibold mt-6 mb-1">Drawdown</h3>
+      <p className="text-xs mb-4" style={{color: '#666'}}>Perte maximale depuis un pic</p>
+
       <ResponsiveContainer width="100%" height={120}>
         <LineChart data={MOCK_DATA}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip />
-          <ReferenceLine y={0} stroke="#666" />
-          <Line
-            type="monotone"
-            dataKey="drawdown"
-            stroke="#ef4444"
-            strokeWidth={2}
-            dot={false}
-          />
+          <CartesianGrid strokeDasharray="3 3" stroke="#1e2028" />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#555' }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fontSize: 10, fill: '#555' }} axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={tooltipStyle} />
+          <ReferenceLine y={0} stroke="#333" />
+          <Line type="monotone" dataKey="drawdown" stroke="#E24B4A" strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
-
     </div>
   );
 }

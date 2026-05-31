@@ -1,9 +1,7 @@
 'use client';
 
 // ============================================================
-// DONNÉES MOCK — à remplacer par les vraies données de Berkant
-// Ces données viendront de : BacktestResult.generated_code
-// et BacktestResult.compliance_log
+// DONNÉES MOCK — à remplacer par BacktestResult.generated_code
 // ============================================================
 const MOCK_CODE = `import vectorbt as vbt
 import pandas as pd
@@ -16,12 +14,9 @@ def run_strategy(data: pd.DataFrame) -> dict:
     slow = data['close'].rolling(30).mean()
     entries = fast > slow
     exits = fast < slow
-    
     portfolio = vbt.Portfolio.from_signals(
-        data['close'],
-        entries=entries,
-        exits=exits,
-        init_cash=10000,
+        data['close'], entries=entries,
+        exits=exits, init_cash=10000,
     )
     return portfolio.stats()`;
 
@@ -48,47 +43,42 @@ export default function WhiteBox() {
   };
 
   return (
-    <div className="mt-6 border rounded-lg p-4">
+    <div style={{background: '#16181F', border: '1px solid #2a2a2a'}} className="rounded-xl p-6">
+      <h3 className="text-white font-semibold mb-1">Code Python généré</h3>
+      <p className="text-xs mb-4" style={{color: '#666'}}>Exportable — White-Box complet</p>
 
-      {/* Code Python généré */}
-      <h3 className="text-sm font-semibold text-gray-600 mb-3">
-        Code Python généré
-      </h3>
-      <div className="bg-gray-900 rounded-lg p-4 mb-4 overflow-auto">
-        <pre className="text-green-400 text-xs font-mono whitespace-pre">
-          {MOCK_CODE}
-        </pre>
+      <div style={{background: '#0d0f14', border: '1px solid #2a2a2a'}} className="rounded-lg p-4 mb-4 overflow-auto">
+        <pre className="text-xs font-mono" style={{color: '#9FE1CB', lineHeight: 1.7}}>{MOCK_CODE}</pre>
       </div>
 
-      {/* Bouton export */}
       <button
         onClick={handleExport}
-        className="w-full bg-blue-500 text-white py-2 px-4 rounded mb-6 hover:bg-blue-600"
+        className="w-full py-3 rounded-lg font-medium text-sm text-white mb-6 transition-all"
+        style={{background: '#1D9E75'}}
       >
         ⬇ Exporter strategy.py
       </button>
 
-      {/* Log AI Act */}
-      <h3 className="text-sm font-semibold text-gray-600 mb-3">
-        Log de conformité AI Act
-      </h3>
-      <div className="border rounded-lg overflow-hidden">
+      <h3 className="text-white font-semibold mb-1">Log de conformité AI Act</h3>
+      <p className="text-xs mb-4" style={{color: '#666'}}>Décisions traçables — Article 12</p>
+
+      <div style={{border: '1px solid #2a2a2a'}} className="rounded-lg overflow-hidden">
         {MOCK_COMPLIANCE.map((item, index) => (
           <div
             key={index}
-            className="flex justify-between items-center p-3 border-b last:border-b-0"
+            className="flex justify-between items-center p-4"
+            style={{borderBottom: index < MOCK_COMPLIANCE.length - 1 ? '1px solid #2a2a2a' : 'none', background: '#1a1c24'}}
           >
             <div>
-              <p className="text-sm font-medium text-gray-700">{item.agent}</p>
-              <p className="text-xs text-gray-400">{item.rationale}</p>
+              <p className="text-sm font-medium text-white">{item.agent}</p>
+              <p className="text-xs mt-0.5" style={{color: '#555'}}>{item.rationale}</p>
             </div>
-            <span className="text-sm font-semibold text-green-600">
+            <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{background: '#0F3028', color: '#1D9E75'}}>
               {item.decision}
             </span>
           </div>
         ))}
       </div>
-
     </div>
   );
 }
