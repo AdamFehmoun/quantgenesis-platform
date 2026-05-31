@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import sys
@@ -8,6 +9,7 @@ from sqlmodel import Session
 
 from app.core.db import get_session
 from app.core.rate_limit import limiter
+from app.models.sandbox_log import SandboxLog
 from app.models.strategy import Strategy
 
 logger = logging.getLogger(__name__)
@@ -80,6 +82,43 @@ def _run_sandbox_backtest(code: str, spread: float = _SPREAD_EQUITY_US) -> dict[
         return {"status": "ERROR", "stderr": str(exc)}
 
 
+def _persist_sandbox_log(
+    session: Session,
+    code: str,
+    backtest_result: dict[str, Any] | None,
+) -> None:
+    """B-LOGS-SANDBOX: persist one row per sandbox run.
+
+    Aligned on Mathis' official SandboxLog schema (commit c7ca780):
+      - status, execution_time_ms, code_hash, memory_used_mb : NOT NULL
+      - sharpe_ratio, error_type                             : nullable
+
+    code_hash = sha256(code)[:32] so identical runs share the same hash for
+    correlation. memory_used_mb defaults to 0.0 (NOT NULL in the table).
+
+    Never raises — sandbox logging is observability, not the critical path.
+    """
+    if not backtest_result:
+        return
+    try:
+        code_hash = hashlib.sha256(code.encode("utf-8")).hexdigest()[:32]
+        raw_sharpe = backtest_result.get("sharpe_ratio")
+        sharpe = float(raw_sharpe) if raw_sharpe is not None else None
+        row = SandboxLog(
+            status=str(backtest_result.get("status", "UNKNOWN")),
+            error_type=backtest_result.get("error"),
+            sharpe_ratio=sharpe,
+            execution_time_ms=int(backtest_result.get("execution_time_ms", 0) or 0),
+            memory_used_mb=float(backtest_result.get("memory_used_mb") or 0.0),
+            code_hash=code_hash,
+        )
+        session.add(row)
+        session.commit()
+    except Exception as exc:
+        logger.warning("Failed to persist SandboxLog: %s", exc)
+        session.rollback()
+
+
 def _build_metrics(backtest_result: dict[str, Any] | None) -> dict[str, float | int]:
     """Shape the metrics object expected by the frontend, rounded to 2 decimals."""
     result = backtest_result or {}
@@ -122,6 +161,7 @@ def run_pipeline(
     backtest_params = {"spread": spread}
 
     backtest_result: dict[str, Any] | None = None
+    executed_code: str | None = None
     if status == "success":
         code = pipeline_result.get("claude_code_instructions") or final_spec.get(
             "claude_code_instructions"
@@ -134,6 +174,7 @@ print(f'DRAWDOWN:{float(pf.max_drawdown()):.4f}')
 print(f'RETURN:{float(pf.total_return()):.4f}')
 print(f'TRADES:{int(pf.trades.count() if hasattr(pf, "trades") else 0)}')
 """
+            executed_code = code
             backtest_result = _run_sandbox_backtest(code, spread=spread)
         else:
             logger.warning("No claude_code_instructions returned by agents; skipping backtest.")
@@ -152,6 +193,12 @@ print(f'TRADES:{int(pf.trades.count() if hasattr(pf, "trades") else 0)}')
     session.add(strategy)
     session.commit()
     session.refresh(strategy)
+
+    # B-LOGS-SANDBOX: persist one row per sandbox run (best-effort, won't raise).
+    # Skipped on REJECTED runs (executed_code is None) — SandboxLog only tracks
+    # actual sandbox executions, not pipeline-level rejections.
+    if executed_code is not None:
+        _persist_sandbox_log(session, executed_code, backtest_result)
 
     return {
         "id": str(strategy.id),

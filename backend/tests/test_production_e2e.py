@@ -130,6 +130,20 @@ def _assert_full_spec(body: dict[str, Any], call_idx: int) -> None:
             f"call #{call_idx}: metrics[{key!r}] must be numeric, got {type(metrics[key]).__name__}"
         )
 
+    # B-E2E-SHARPE: a successful pipeline must produce a real Sharpe ratio
+    # (the sandbox timeout incident used to ship zeros silently). We only
+    # assert on success runs — a rejected run legitimately carries 0.0.
+    if body["status"] == "success":
+        sharpe = metrics["sharpe_ratio"]
+        assert isinstance(sharpe, float), (
+            f"call #{call_idx}: sharpe_ratio must be a float on success, "
+            f"got {type(sharpe).__name__} ({sharpe!r})"
+        )
+        assert sharpe != 0.0, (
+            f"call #{call_idx}: sharpe_ratio is 0.0 on a success run — sandbox "
+            f"likely returned zero metrics (regression of the timeout/502 issue)"
+        )
+
 
 def test_pipeline_run_three_consecutive_calls(prod_client: httpx.Client) -> None:
     """Fire 3 consecutive POST /api/pipeline/run calls, all must return a full spec.
