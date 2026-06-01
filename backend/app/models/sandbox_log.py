@@ -14,8 +14,12 @@ class SandboxLog(SQLModel, table=True):
     memory_used_mb: float = Field(default=0.0)
     code_hash: str = Field(nullable=False, index=True)
     
-    # Tes excellentes initiatives
+    # Métriques de performance QuantGenesis
     sharpe_ratio: Optional[float] = Field(default=None)
+    drawdown: Optional[float] = Field(default=None)            # 🚀 NOUVEAU
+    total_return_pct: Optional[float] = Field(default=None)    # 🚀 NOUVEAU
+    num_trades: Optional[int] = Field(default=None)            # 🚀 NOUVEAU
+    
     error_type: Optional[str] = Field(default=None)
     
     created_at: datetime = Field(
