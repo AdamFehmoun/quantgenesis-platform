@@ -1,6 +1,7 @@
 import time
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -359,6 +360,109 @@ def test_logs_respects_limit_query_param(client: TestClient) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert len(body) <= 2
+
+
+# ─────────────────────────────────────────────
+# B-LOGS-SANDBOX (S3 / Task 3) — GET /api/logs/sandbox metrics envelope
+# ─────────────────────────────────────────────
+
+def test_logs_sandbox_returns_metrics_envelope(
+    client: TestClient,
+    stub_agents_pipeline,
+    monkeypatch,
+) -> None:
+    """One pipeline run must surface a row at /api/logs/sandbox with the
+    new `metrics{}` sub-object exposing the full backtest envelope.
+    """
+    from app.api import pipeline as pipeline_api
+
+    # Stub the sandbox with a fully-populated result matching the new executor
+    # contract (raw fractions under `drawdown`/`return`, num_trades int).
+    monkeypatch.setattr(
+        pipeline_api,
+        "_run_sandbox_backtest",
+        lambda code, spread=0.0001: {
+            "status": "SUCCESS",
+            "sharpe_ratio": 1.42,
+            "drawdown": -0.083,        # raw fraction → -8.3%
+            "return": 0.237,            # raw fraction → +23.7%
+            "num_trades": 17,
+            "execution_time_ms": 1234,
+            "memory_used_mb": 64.5,
+        },
+    )
+
+    run = client.post("/api/pipeline/run", json={"intent": "RSI BTC for sandbox log test"})
+    assert run.status_code == 200, run.text
+
+    resp = client.get("/api/logs/sandbox?limit=5")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert isinstance(body, list) and body, "expected at least one sandbox log row"
+
+    sample = body[0]
+
+    # Top-level audit / execution fields
+    for top_key in (
+        "id",
+        "status",
+        "error_type",
+        "execution_time_ms",
+        "memory_used_mb",
+        "code_hash",
+        "metrics",
+        "created_at",
+    ):
+        assert top_key in sample, f"missing top-level key: {top_key}"
+
+    # Metrics sub-object (B-LOGS-SANDBOX S3 / Task 3)
+    metrics = sample["metrics"]
+    assert isinstance(metrics, dict)
+    for metric_key in ("sharpe_ratio", "max_drawdown_pct", "total_return_pct", "trades_count"):
+        assert metric_key in metrics, f"metrics missing key: {metric_key}"
+
+    assert metrics["sharpe_ratio"] == pytest.approx(1.42, abs=0.01)
+    # Raw fraction → pct conversion is the contract bridge
+    assert metrics["max_drawdown_pct"] == pytest.approx(-8.3, abs=0.05)
+    assert metrics["total_return_pct"] == pytest.approx(23.7, abs=0.05)
+    assert metrics["trades_count"] == 17
+
+
+def test_logs_sandbox_metrics_nullable_on_error_run(
+    client: TestClient,
+    stub_agents_pipeline,
+    monkeypatch,
+) -> None:
+    """An ERROR sandbox run must still produce a log row, with null metrics
+    rather than spurious zeros (so the frontend can render 'n/a')."""
+    from app.api import pipeline as pipeline_api
+
+    monkeypatch.setattr(
+        pipeline_api,
+        "_run_sandbox_backtest",
+        lambda code, spread=0.0001: {
+            "status": "ERROR",
+            "error": "code_crash",
+            "execution_time_ms": 42,
+        },
+    )
+
+    client.post("/api/pipeline/run", json={"intent": "Broken strategy AAPL"})
+
+    resp = client.get("/api/logs/sandbox?limit=5")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body, "expected at least one sandbox log row even on ERROR"
+
+    # Find a row tagged as ERROR (most recent matching)
+    error_rows = [r for r in body if r["status"] == "ERROR"]
+    assert error_rows, "expected an ERROR row from the broken run"
+    err = error_rows[0]
+    assert err["error_type"] == "code_crash"
+    assert err["metrics"]["sharpe_ratio"] is None
+    assert err["metrics"]["max_drawdown_pct"] is None
+    assert err["metrics"]["total_return_pct"] is None
+    assert err["metrics"]["trades_count"] is None
 
 
 # ─────────────────────────────────────────────

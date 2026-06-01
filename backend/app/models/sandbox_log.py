@@ -17,7 +17,14 @@ class SandboxLog(SQLModel, table=True):
     # Tes excellentes initiatives
     sharpe_ratio: Optional[float] = Field(default=None)
     error_type: Optional[str] = Field(default=None)
-    
+
+    # B-LOGS-SANDBOX (S3 / Task 2) — full backtest envelope for the frontend.
+    # Nullable on purpose: historical rows persisted before this column landed
+    # (and ERROR rows where the metrics never resolved) must remain queryable.
+    max_drawdown_pct: Optional[float] = Field(default=None)
+    total_return_pct: Optional[float] = Field(default=None)
+    trades_count: Optional[int] = Field(default=None)
+
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc), nullable=False, index=True
     )

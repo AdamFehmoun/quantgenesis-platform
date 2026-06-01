@@ -33,21 +33,27 @@ def _serialize(row: APIRequestLog) -> dict[str, Any]:
 
 
 def _serialize_sandbox(row: SandboxLog) -> dict[str, Any]:
-    """B-LOGS-SANDBOX: canonical wire shape for the sandbox metrics row.
+    """B-LOGS-SANDBOX (S3 / Task 3): canonical wire shape for one sandbox row.
 
-    Aligned strictly on the official SandboxLog schema (Mathis, commit c7ca780):
-    audit triplet (status / error_type / created_at) + execution metrics
-    (sharpe_ratio nullable, execution_time_ms, memory_used_mb) + code_hash
-    so the frontend can correlate identical runs.
+    Top-level: audit fields (id / status / error_type / created_at) + execution
+    fields (execution_time_ms / memory_used_mb / code_hash).
+    Sub-object `metrics`: the financial backtest envelope the frontend renders
+    (sharpe_ratio / max_drawdown_pct / total_return_pct / trades_count). All
+    four can be null when the run failed or the sandbox couldn't compute them.
     """
     return {
         "id": str(row.id),
         "status": row.status,
         "error_type": row.error_type,
-        "sharpe_ratio": row.sharpe_ratio,
         "execution_time_ms": row.execution_time_ms,
         "memory_used_mb": row.memory_used_mb,
         "code_hash": row.code_hash,
+        "metrics": {
+            "sharpe_ratio": row.sharpe_ratio,
+            "max_drawdown_pct": row.max_drawdown_pct,
+            "total_return_pct": row.total_return_pct,
+            "trades_count": row.trades_count,
+        },
         "created_at": row.created_at.isoformat(),
     }
 
