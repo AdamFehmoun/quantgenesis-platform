@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import sys
@@ -8,6 +9,7 @@ from sqlmodel import Session
 
 from app.core.db import get_session
 from app.core.rate_limit import limiter
+from app.models.sandbox_log import SandboxLog
 from app.models.strategy import Strategy
 
 logger = logging.getLogger(__name__)
@@ -80,14 +82,111 @@ def _run_sandbox_backtest(code: str, spread: float = _SPREAD_EQUITY_US) -> dict[
         return {"status": "ERROR", "stderr": str(exc)}
 
 
+def _optional_float(value: Any) -> float | None:
+    """Coerce a sandbox-reported metric to float, preserving None for missing data.
+
+    The frontend distinguishes "no data" (null) from "exactly zero" (0.0),
+    so we must not silently default to 0.0 here.
+    """
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_backtest_metrics(backtest_result: dict[str, Any] | None) -> dict[str, Any]:
+    """Reconcile the two executor shapes.
+
+    Mathis' executor emits raw fractions under `drawdown` / `return` (pf.max_drawdown()
+    and pf.total_return() return 0..1 floats). Older callers — and our frontend
+    contract — expect `max_drawdown_pct` / `total_return_pct` in percent. This
+    helper accepts either, returns the canonical *_pct envelope.
+
+    Returns a dict with potentially-null floats so the persistence layer can tell
+    "missing" apart from "exactly zero".
+    """
+    src = backtest_result or {}
+
+    def _pct(key_pct: str, key_raw: str) -> float | None:
+        if src.get(key_pct) is not None:
+            return _optional_float(src[key_pct])
+        raw = _optional_float(src.get(key_raw))
+        return None if raw is None else raw * 100.0
+
+    return {
+        "sharpe_ratio": _optional_float(src.get("sharpe_ratio")),
+        "max_drawdown_pct": _pct("max_drawdown_pct", "drawdown"),
+        "total_return_pct": _pct("total_return_pct", "return"),
+        "num_trades": _optional_int(src.get("num_trades")),
+    }
+
+
+def _persist_sandbox_log(
+    session: Session,
+    code: str,
+    backtest_result: dict[str, Any] | None,
+) -> None:
+    """B-LOGS-SANDBOX: persist one row per sandbox run.
+
+    Aligned on Mathis' official SandboxLog schema (commit c7ca780) extended in
+    S3 / Task 2 with the full metrics envelope (drawdown / return / trades):
+      - status, execution_time_ms, code_hash, memory_used_mb : NOT NULL
+      - sharpe_ratio, error_type                             : nullable
+      - max_drawdown_pct, total_return_pct, trades_count     : nullable (S3)
+
+    code_hash = sha256(code)[:32] so identical runs share the same hash for
+    correlation. memory_used_mb defaults to 0.0 (NOT NULL in the table).
+
+    Never raises — sandbox logging is observability, not the critical path.
+    """
+    if not backtest_result:
+        return
+    try:
+        code_hash = hashlib.sha256(code.encode("utf-8")).hexdigest()[:32]
+        normalized = _normalize_backtest_metrics(backtest_result)
+        row = SandboxLog(
+            status=str(backtest_result.get("status", "UNKNOWN")),
+            error_type=backtest_result.get("error"),
+            sharpe_ratio=normalized["sharpe_ratio"],
+            max_drawdown_pct=normalized["max_drawdown_pct"],
+            total_return_pct=normalized["total_return_pct"],
+            trades_count=normalized["num_trades"],
+            execution_time_ms=int(backtest_result.get("execution_time_ms", 0) or 0),
+            memory_used_mb=float(backtest_result.get("memory_used_mb") or 0.0),
+            code_hash=code_hash,
+        )
+        session.add(row)
+        session.commit()
+    except Exception as exc:
+        logger.warning("Failed to persist SandboxLog: %s", exc)
+        session.rollback()
+
+
 def _build_metrics(backtest_result: dict[str, Any] | None) -> dict[str, float | int]:
-    """Shape the metrics object expected by the frontend, rounded to 2 decimals."""
+    """Shape the metrics object expected by the frontend, rounded to 2 decimals.
+
+    Routed through the same normalizer as the SandboxLog persistence path so
+    the API response and the persisted row are guaranteed to agree, even when
+    the executor switches between raw-fraction (`drawdown`) and pct shapes.
+    """
+    normalized = _normalize_backtest_metrics(backtest_result)
     result = backtest_result or {}
     return {
-        "sharpe_ratio": round(float(result.get("sharpe_ratio", 0.0) or 0.0), 2),
-        "max_drawdown_pct": round(float(result.get("max_drawdown_pct", 0.0) or 0.0), 2),
-        "total_return_pct": round(float(result.get("total_return_pct", 0.0) or 0.0), 2),
-        "num_trades": int(result.get("num_trades", 0) or 0),
+        "sharpe_ratio": round(normalized["sharpe_ratio"] or 0.0, 2),
+        "max_drawdown_pct": round(normalized["max_drawdown_pct"] or 0.0, 2),
+        "total_return_pct": round(normalized["total_return_pct"] or 0.0, 2),
+        "num_trades": normalized["num_trades"] or 0,
         "win_rate_pct": round(float(result.get("win_rate_pct", 0.0) or 0.0), 2),
     }
 
@@ -122,6 +221,7 @@ def run_pipeline(
     backtest_params = {"spread": spread}
 
     backtest_result: dict[str, Any] | None = None
+    executed_code: str | None = None
     if status == "success":
         code = pipeline_result.get("claude_code_instructions") or final_spec.get(
             "claude_code_instructions"
@@ -134,6 +234,7 @@ print(f'DRAWDOWN:{float(pf.max_drawdown()):.4f}')
 print(f'RETURN:{float(pf.total_return()):.4f}')
 print(f'TRADES:{int(pf.trades.count() if hasattr(pf, "trades") else 0)}')
 """
+            executed_code = code
             backtest_result = _run_sandbox_backtest(code, spread=spread)
         else:
             logger.warning("No claude_code_instructions returned by agents; skipping backtest.")
@@ -152,6 +253,12 @@ print(f'TRADES:{int(pf.trades.count() if hasattr(pf, "trades") else 0)}')
     session.add(strategy)
     session.commit()
     session.refresh(strategy)
+
+    # B-LOGS-SANDBOX: persist one row per sandbox run (best-effort, won't raise).
+    # Skipped on REJECTED runs (executed_code is None) — SandboxLog only tracks
+    # actual sandbox executions, not pipeline-level rejections.
+    if executed_code is not None:
+        _persist_sandbox_log(session, executed_code, backtest_result)
 
     return {
         "id": str(strategy.id),

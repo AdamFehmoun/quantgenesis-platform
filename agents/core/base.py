@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 import anthropic
 from dotenv import load_dotenv
 from budget import check_budget, record_cost, BudgetExceededError
+from agents.core.cache import build_cache_key, get_cached, put_cached
 load_dotenv()
 
 class BaseAgent(ABC):
@@ -51,6 +52,18 @@ class BaseAgent(ABC):
 
         # Construire le message utilisateur depuis l'input
         user_message = json.dumps(input_data, ensure_ascii=False, indent=2)
+
+        # B-CACHE: lookup avant tout appel API (skip silencieux pour Critique
+        # ou si Redis est indisponible). La clé inclut prompt + modèle + input,
+        # donc tout changement d'un de ces 3 invalide naturellement la clé.
+        cache_key = build_cache_key(self.name, self.model, self.system_prompt, input_data)
+        cached = get_cached(self.name, cache_key)
+        if cached is not None:
+            if verbose:
+                print(f"💾 Cache HIT [{self.name}] — appel Anthropic évité")
+            cached.setdefault("compliance_log", {})["from_cache"] = True
+            cached["from_cache"] = True
+            return cached
 
         # Vérifier le budget avant l'appel API
         check_budget()
@@ -106,6 +119,10 @@ class BaseAgent(ABC):
 
         if verbose:
             print(f"📦 Output: {json.dumps(parsed, ensure_ascii=False, indent=2)[:300]}...")
+
+        # B-CACHE: persiste le résultat selon le TTL de l'agent (no-op pour Critique).
+        result["from_cache"] = False
+        put_cached(self.name, cache_key, result)
 
         return result
 
