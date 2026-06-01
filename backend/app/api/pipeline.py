@@ -223,9 +223,11 @@ def run_pipeline(
     backtest_result: dict[str, Any] | None = None
     executed_code: str | None = None
     if status == "success":
+        # On récupère le code généré par l'agent Codeur
         code = pipeline_result.get("claude_code_instructions") or final_spec.get(
             "claude_code_instructions"
         )
+        
         if code:
             code += """
 # --- Injections Metrics QuantGenesis ---
@@ -235,7 +237,41 @@ print(f'RETURN:{float(pf.total_return()):.4f}')
 print(f'TRADES:{int(pf.trades.count() if hasattr(pf, "trades") else 0)}')
 """
             executed_code = code
-            backtest_result = _run_sandbox_backtest(code, spread=spread)
+            # --- MATHIS S3 : BOUCLE RETRY ET FALLBACK ---
+            MAX_RETRIES = 2
+            attempt = 0
+            success = False
+            
+            while attempt <= MAX_RETRIES and not success:
+                attempt += 1
+                logger.info(f"[Sandbox] Exécution tentative {attempt}/{MAX_RETRIES + 1}")
+                
+                backtest_result = _run_sandbox_backtest(code, spread=spread)
+                
+                # On considère le run comme un succès s'il y a un retour de la sandbox avec SUCCESS
+                if backtest_result and backtest_result.get('status') == 'SUCCESS':
+                    success = True
+                    logger.info(f"[Sandbox] Tentative {attempt} réussie.")
+                else:
+                    error_type = backtest_result.get('error', 'unknown') if backtest_result else "unknown"
+                    logger.warning(f"[Sandbox] Échec tentative {attempt}. Raison: {error_type}")
+                    
+                    # Règle de sécurité : On ne retry jamais si c'est une violation de sécurité
+                    if error_type == 'security_violation':
+                        logger.error("[Sandbox] Violation de sécurité détectée, annulation immédiate des retries.")
+                        break
+            
+            # Si toutes les tentatives échouent (erreurs de syntaxe ou crash du code)
+            if not success:
+                logger.warning("[Sandbox] Toutes les tentatives ont échoué. Déclenchement du signal FALLBACK.")
+                # On renvoie un résultat formaté pour indiquer à Paul qu'il doit déclencher son template
+                backtest_result = {
+                    'status': 'FALLBACK',
+                    'error': 'all_retries_failed',
+                    'fallback_required': True,
+                    'execution_time_ms': 0
+                }
+            # ----------------------------------------------
         else:
             logger.warning("No claude_code_instructions returned by agents; skipping backtest.")
 

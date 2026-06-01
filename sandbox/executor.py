@@ -6,14 +6,25 @@ from e2b_code_interpreter import Sandbox
 # Charge la clé E2B depuis le fichier .env caché
 load_dotenv(dotenv_path="sandbox/.env")
 
-def verify_code_safety(code: str) -> tuple[bool, str]:
+def validate_and_check_security(code: str) -> tuple[str, str]:
+    """
+    Vérifie d'abord si le code compile, puis s'il est sécurisé.
+    Retourne un tuple: (statut, raison)
+    Statuts possibles: 'ok', 'syntax_error', 'security_violation'
+    """
+    # 1. Vérification de la syntaxe (avant E2B)
+    try:
+        compile(code, '<string>', 'exec')
+    except Exception as e:
+        # On attrape les erreurs de syntaxe pour déclencher le retry
+        return 'syntax_error', f"Erreur de compilation : {e}"
+
+    # 2. Vérification de la sécurité (AST)
     BLOCKED_MODULES = {'os', 'subprocess', 'socket', 'sys', 'shutil', 'requests', 'urllib'}
     BLOCKED_FUNCTIONS = {'eval', 'exec', '__import__', 'compile', 'open'}
     
-    try:
-        tree = ast.parse(code)
-    except SyntaxError as e:
-        return False, f"Erreur de syntaxe : {e}"
+    # On sait que le parsing AST va marcher car le compile() est passé
+    tree = ast.parse(code)
 
     class SecurityChecker(ast.NodeVisitor):
         def __init__(self):
@@ -26,22 +37,46 @@ def verify_code_safety(code: str) -> tuple[bool, str]:
                     self.is_safe = False
                     self.reason = f"Import interdit : '{alias.name}'"
             self.generic_visit(node)
+            
+        def visit_Call(self, node):
+            if isinstance(node.func, ast.Name) and node.func.id in BLOCKED_FUNCTIONS:
+                self.is_safe = False
+                self.reason = f"Fonction interdite : '{node.func.id}'"
+            self.generic_visit(node)
 
     checker = SecurityChecker()
     checker.visit(tree)
-    return checker.is_safe, checker.reason
+    
+    if not checker.is_safe:
+        return 'security_violation', checker.reason
+        
+    return 'ok', ""
 
 def run_backtest(code: str, timeout: int = 60, spread: float = 0.0001) -> dict:
     start_time = time.time()
 
-    is_safe, reason = verify_code_safety(code)
-    if not is_safe:
-        return {'status': 'ERROR', 'error': 'security_violation', 'details': reason, 'execution_time_ms': 0}
+    # 🚀 FIX SEMAINE 3 : Validation du code avant exécution
+    validation_status, reason = validate_and_check_security(code)
+    
+    if validation_status == 'syntax_error':
+        return {
+            'status': 'ERROR', 
+            'error': 'syntax_error', 
+            'details': reason, 
+            'execution_time_ms': 0
+        }
+    elif validation_status == 'security_violation':
+        return {
+            'status': 'ERROR', 
+            'error': 'security_violation', 
+            'details': reason, 
+            'execution_time_ms': 0
+        }
 
     instrumented_code = f"SPREAD = {float(spread)!r}\n{code}"
 
     try:
-        # 🚀 FIX BUG 2 : Utilisation d'une Sandbox vierge officielle (Injection Runtime)
+        # Utilisation d'une Sandbox vierge officielle (Injection Runtime)
         with Sandbox.create() as s:
             
             # Installation silencieuse des dépendances requises au runtime
@@ -59,7 +94,7 @@ def run_backtest(code: str, timeout: int = 60, spread: float = 0.0001) -> dict:
                     'execution_time_ms': execution_time_ms
                 }
 
-            # 🚀 FIX BUG 1 : Reconstruction du stdout à partir de la liste logs.stdout
+            # Reconstruction du stdout à partir de la liste logs.stdout
             stdout_text = "".join(execution.logs.stdout) if hasattr(execution, 'logs') and execution.logs and execution.logs.stdout else ""
             
             sharpe = drawdown = total_return = num_trades = 0.0
