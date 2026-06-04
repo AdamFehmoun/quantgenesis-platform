@@ -224,11 +224,10 @@ def run_pipeline(
     executed_code: str | None = None
     if status == "success":
         # On récupère le code généré par l'agent Codeur
-        from agents.codeur import generate_code
-
-        _codeur_out = generate_code(spec=final_spec, user_intent=intent)
-        code = _codeur_out["code"]
-
+        code = pipeline_result.get("claude_code_instructions") or final_spec.get(
+            "claude_code_instructions"
+        )
+        
         if code:
             code += """
 # --- Injections Metrics QuantGenesis ---
