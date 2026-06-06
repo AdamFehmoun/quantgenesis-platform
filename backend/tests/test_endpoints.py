@@ -207,7 +207,7 @@ _REQUIRED_METRICS_KEYS = {
     "sharpe_ratio",
     "max_drawdown_pct",
     "total_return_pct",
-    "num_trades",
+    "trades_count",
     "win_rate_pct",
 }
 
@@ -218,7 +218,7 @@ def test_strategies_list_item_has_required_fields(client: TestClient) -> None:
         "sharpe_ratio": 1.85,
         "max_drawdown_pct": -7.4,
         "total_return_pct": 31.2,
-        "num_trades": 22,
+        "trades_count": 22,
         "win_rate_pct": 61.1,
     }
     client.post(
@@ -250,7 +250,7 @@ def test_strategies_list_item_has_required_fields(client: TestClient) -> None:
     missing_metrics = _REQUIRED_METRICS_KEYS - set(probe["metrics"].keys())
     assert not missing_metrics, f"metrics missing keys: {sorted(missing_metrics)}"
     assert probe["metrics"]["sharpe_ratio"] == 1.85
-    assert probe["metrics"]["num_trades"] == 22
+    assert probe["metrics"]["trades_count"] == 22
 
 
 def test_strategies_list_item_defaults_metrics_when_absent(client: TestClient) -> None:

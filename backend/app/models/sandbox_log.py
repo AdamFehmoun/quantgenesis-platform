@@ -3,31 +3,28 @@ from datetime import datetime, timezone
 from typing import Optional
 from sqlmodel import Field, SQLModel
 
+
 class SandboxLog(SQLModel, table=True):
     __tablename__ = "sandbox_logs"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
     status: str = Field(nullable=False, index=True)
     execution_time_ms: int = Field(nullable=False)
-    
-    # Ajouts demandés par la tâche M-14
+
     memory_used_mb: float = Field(default=0.0)
     code_hash: str = Field(nullable=False, index=True)
-    
-    # Métriques de performance QuantGenesis
-    sharpe_ratio: Optional[float] = Field(default=None)
-    drawdown: Optional[float] = Field(default=None)            # 🚀 NOUVEAU
-    total_return_pct: Optional[float] = Field(default=None)    # 🚀 NOUVEAU
-    num_trades: Optional[int] = Field(default=None)            # 🚀 NOUVEAU
-    
-    error_type: Optional[str] = Field(default=None)
 
-    # B-LOGS-SANDBOX (S3 / Task 2) — full backtest envelope for the frontend.
-    # Nullable on purpose: historical rows persisted before this column landed
-    # (and ERROR rows where the metrics never resolved) must remain queryable.
+    # Métriques de performance — toutes Optional : ERROR/FALLBACK runs n'en ont pas.
+    # Noms canoniques (arbitrage du 06/06/2026) :
+    #   max_drawdown_pct (et plus `drawdown`)
+    #   total_return_pct (et plus `return`)
+    #   trades_count     (et plus `num_trades`)
+    sharpe_ratio: Optional[float] = Field(default=None)
     max_drawdown_pct: Optional[float] = Field(default=None)
     total_return_pct: Optional[float] = Field(default=None)
     trades_count: Optional[int] = Field(default=None)
+
+    error_type: Optional[str] = Field(default=None)
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc), nullable=False, index=True
