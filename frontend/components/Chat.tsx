@@ -1,25 +1,43 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { BacktestResult } from '../app/page';
 
-interface Metrics {
-  sharpe_ratio: number;
-  max_drawdown_pct: number;
-  total_return_pct: number;
-  num_trades: number;
-  win_rate_pct: number;
+interface ChatProps {
+  onResult: (result: BacktestResult) => void;
 }
 
-interface BacktestResult {
-  status: string;
-  strategy_name: string;
-  metrics: Metrics;
-}
+const AGENT_STEPS = [
+  'Brainstormer — analyse de l\'intention...',
+  'ChefProjet — définition de la stratégie...',
+  'Architecte — construction du modèle...',
+  'Codeur — génération du code Python...',
+  'Sandbox — exécution du backtest...',
+  'Critique — validation des résultats...',
+];
 
-export default function Chat() {
+export default function Chat({ onResult }: ChatProps) {
   const [intent, setIntent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stepIndex, setStepIndex] = useState<number>(0);
+  const [elapsed, setElapsed] = useState<number>(0);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (loading) {
+      setElapsed(0);
+      setStepIndex(0);
+      interval = setInterval(() => {
+        setElapsed((e) => {
+          const next = e + 1;
+          setStepIndex(Math.min(Math.floor(next / 15), AGENT_STEPS.length - 1));
+          return next;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [loading]);
 
   const handleAnalyse = async () => {
     if (!intent.trim()) return;
@@ -32,16 +50,33 @@ export default function Chat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ intent })
       });
+
+      if (!res.ok) {
+        if (res.status === 429) {
+          const retryAfter = res.headers.get('Retry-After');
+          const minutes = retryAfter ? Math.ceil(Number(retryAfter) / 60) : 5;
+          setError(`⏱ Limite atteinte — trop de requêtes. Réessaie dans ${minutes} min.`);
+        } else if (res.status === 500) {
+          setError('Erreur serveur (500) — le pipeline a rencontré un problème. Réessaie dans quelques instants.');
+        } else if (res.status === 503) {
+          setError('Service temporairement indisponible (503) — réessaie dans 1 min.');
+        } else {
+          setError(`Erreur ${res.status} — une erreur inattendue s'est produite.`);
+        }
+        return;
+      }
+
       const data: BacktestResult = await res.json();
       setResult(data);
+      onResult(data);
     } catch (err) {
-      setError('Erreur : backend non disponible');
+      setError('Connexion impossible — vérifie ta connexion internet ou réessaie dans quelques instants.');
     } finally {
       setLoading(false);
     }
   };
 
-  const getWarning = (metrics: Metrics): string | null => {
+  const getWarning = (metrics: BacktestResult['metrics']): string | null => {
     if (metrics.sharpe_ratio > 5) return '⚠️ Sharpe > 5 — résultats suspects, possible overfitting';
     if (metrics.max_drawdown_pct === 0) return '⚠️ Drawdown nul — vérifier les données';
     if (metrics.num_trades < 5) return '⚠️ Trop peu de trades pour être significatif';
@@ -49,6 +84,8 @@ export default function Chat() {
     return null;
   };
 
+  const isFallback = result?.backtest?.status === 'FALLBACK' || result?.status === 'FALLBACK';
+  const progressPct = Math.min((elapsed / 90) * 100, 98);
   const examples = ['momentum Bitcoin drawdown 10%', 'ETH RSI 14 mean reversion', 'BTC/ETH ratio trading'];
 
   return (
@@ -70,7 +107,7 @@ export default function Chat() {
       </div>
 
       <div style={{background: '#1a1c24', border: '1px solid #2a2a2a'}} className="rounded-lg p-4 mb-4 min-h-16 flex items-center">
-        <span style={{color: result ? '#fff' : '#555'}} className="text-sm">
+        <span style={{color: intent ? '#fff' : '#555'}} className="text-sm">
           {intent || 'Tape ou choisis un exemple ci-dessus...'}
         </span>
       </div>
@@ -104,8 +141,15 @@ export default function Chat() {
       </div>
 
       {loading && (
-        <div className="mt-4 p-3 rounded-lg text-sm" style={{background: '#0F3028', border: '1px solid #1D9E75', color: '#9FE1CB'}}>
-          ⏳ Pipeline IA en cours — résultats dans ~30 secondes
+        <div className="mt-4 p-4 rounded-lg" style={{background: '#0F3028', border: '1px solid #1D9E75'}}>
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm" style={{color: '#9FE1CB'}}>{AGENT_STEPS[stepIndex]}</span>
+            <span className="text-xs" style={{color: '#666'}}>{elapsed}s</span>
+          </div>
+          <div className="w-full rounded-full h-1.5" style={{background: '#1e2028'}}>
+            <div className="h-1.5 rounded-full transition-all duration-1000" style={{background: '#1D9E75', width: `${progressPct}%`}} />
+          </div>
+          <p className="text-xs mt-2" style={{color: '#555'}}>Durée estimée : 1 à 2 minutes — 5 agents + sandbox E2B</p>
         </div>
       )}
 
@@ -115,11 +159,17 @@ export default function Chat() {
         </div>
       )}
 
+      {result && isFallback && (
+        <div className="mt-4 p-3 rounded-lg text-sm" style={{background: '#2D2510', border: '1px solid #FAC775', color: '#FAC775'}}>
+          ⚠️ Stratégie de secours utilisée (FALLBACK) — les métriques affichées sont partielles. Un vrai backtest n'a pas pu être exécuté.
+        </div>
+      )}
+
       {result && (
         <div className="mt-6">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-white">{result.strategy_name || 'Résultats'}</span>
-            <span className="text-xs px-2 py-1 rounded-full" style={{background: '#0F3028', color: '#1D9E75'}}>
+            <span className="text-sm font-medium text-white">{result.strategy_name || result.intent || 'Résultats'}</span>
+            <span className="text-xs px-2 py-1 rounded-full" style={{background: isFallback ? '#2D2510' : '#0F3028', color: isFallback ? '#FAC775' : '#1D9E75'}}>
               {result.status}
             </span>
           </div>
