@@ -62,10 +62,10 @@ pf = vbt.Portfolio.from_signals(
 )
 
 # 5. Metriques standard
-print(f"Sharpe   : {{_scalar(pf.sharpe_ratio()):.4f}}")
-print(f"Drawdown : {{_scalar(pf.max_drawdown()):.4f}}")
-print(f"Return   : {{_scalar(pf.total_return()):.4f}}")
-print(f"Trades   : {{int(_scalar(pf.trades.count()))}}")
+print(f"SHARPE:{{_scalar(pf.sharpe_ratio()):.4f}}")
+print(f"DRAWDOWN:{{_scalar(pf.max_drawdown()):.4f}}")
+print(f"RETURN:{{_scalar(pf.total_return()):.4f}}")
+print(f"TRADES:{{int(_scalar(pf.trades.count()))}}")
 '''
 
 
