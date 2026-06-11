@@ -70,6 +70,7 @@ print(f"Sharpe   : {{_scalar(pf.sharpe_ratio()):.4f}}")
 print(f"Drawdown : {{_scalar(pf.max_drawdown()):.4f}}")
 print(f"Return   : {{_scalar(pf.total_return()):.4f}}")
 print(f"Trades   : {{int(_scalar(pf.trades.count()))}}")
+print(f"Winrate  : {{_scalar(pf.trades.win_rate()) * 100:.2f}}")
 '''
 
 

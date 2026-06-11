@@ -97,7 +97,7 @@ def run_backtest(code: str, timeout: int = 60, spread: float = 0.0001) -> dict:
             # Reconstruction du stdout à partir de la liste logs.stdout
             stdout_text = "".join(execution.logs.stdout) if hasattr(execution, 'logs') and execution.logs and execution.logs.stdout else ""
             
-            sharpe = drawdown = total_return = num_trades = 0.0
+            sharpe = drawdown = total_return = num_trades = win_rate = 0.0
             if stdout_text:
                 for line in stdout_text.split('\n'):
                     line = line.strip()
@@ -113,6 +113,9 @@ def run_backtest(code: str, timeout: int = 60, spread: float = 0.0001) -> dict:
                     elif line.startswith('TRADES:'):
                         try: num_trades = float(line.split(':')[1])
                         except ValueError: pass
+                    elif line.startswith('WINRATE:'):
+                        try: win_rate = float(line.split(':')[1])
+                        except ValueError: pass
 
             return {
                 'status': 'SUCCESS',
@@ -120,6 +123,7 @@ def run_backtest(code: str, timeout: int = 60, spread: float = 0.0001) -> dict:
                 'drawdown': round(drawdown, 4),
                 'return': round(total_return, 4),
                 'num_trades': int(num_trades),
+                'win_rate_pct': round(win_rate, 2),
                 'execution_time_ms': execution_time_ms,
                 'stdout': stdout_text,
                 'stderr': "".join(execution.logs.stderr) if hasattr(execution, 'logs') and execution.logs and execution.logs.stderr else ""

@@ -235,6 +235,7 @@ print(f'SHARPE:{float(pf.sharpe_ratio()):.4f}')
 print(f'DRAWDOWN:{float(pf.max_drawdown()):.4f}')
 print(f'RETURN:{float(pf.total_return()):.4f}')
 print(f'TRADES:{int(pf.trades.count() if hasattr(pf, "trades") else 0)}')
+print(f'WINRATE:{float(pf.trades.win_rate() * 100):.2f}')
 """
             executed_code = code
             # --- MATHIS S3 : BOUCLE RETRY ET FALLBACK ---
