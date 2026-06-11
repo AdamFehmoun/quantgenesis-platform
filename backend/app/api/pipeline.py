@@ -262,15 +262,52 @@ print(f'TRADES:{int(pf.trades.count() if hasattr(pf, "trades") else 0)}')
                         break
             
             # Si toutes les tentatives échouent (erreurs de syntaxe ou crash du code)
+            # → Activation automatique des templates fallback de Paul
             if not success:
-                logger.warning("[Sandbox] Toutes les tentatives ont échoué. Déclenchement du signal FALLBACK.")
-                # On renvoie un résultat formaté pour indiquer à Paul qu'il doit déclencher son template
-                backtest_result = {
-                    'status': 'FALLBACK',
-                    'error': 'all_retries_failed',
-                    'fallback_required': True,
-                    'execution_time_ms': 0
-                }
+                logger.warning("[Sandbox] Toutes les tentatives ont échoué. Activation des templates fallback.")
+
+                try:
+                    from agents.fallback_templates import select_template, run_template
+
+                    template_name = select_template(intent)
+                    logger.info(f"[Fallback] Template sélectionné : {template_name}")
+
+                    fallback_data = run_template(
+                        template_name,
+                        user_intent=intent,
+                        return_script=True,
+                    )
+
+                    # Le script fallback inclut déjà les 4 prints SHARPE:/DRAWDOWN:/RETURN:/TRADES:
+                    fallback_script = fallback_data['python_script']
+
+                    logger.info("[Fallback] Exécution du script fallback en sandbox...")
+                    fallback_sandbox_result = _run_sandbox_backtest(
+                        fallback_script, spread=spread
+                    )
+
+                    if fallback_sandbox_result and fallback_sandbox_result.get('status') == 'SUCCESS':
+                        logger.info(f"[Fallback] Succès via template '{template_name}'.")
+                        backtest_result = fallback_sandbox_result
+                        backtest_result['fallback_used'] = template_name
+                        backtest_result['original_failure'] = 'all_retries_failed'
+                    else:
+                        logger.error(f"[Fallback] Le template '{template_name}' a aussi échoué en sandbox.")
+                        backtest_result = {
+                            'status': 'FALLBACK_FAILED',
+                            'error': 'fallback_sandbox_crash',
+                            'fallback_attempted': template_name,
+                            'fallback_metrics_local': fallback_data.get('metrics', {}),
+                            'execution_time_ms': 0
+                        }
+
+                except Exception as e:
+                    logger.exception(f"[Fallback] Erreur lors de l'activation des templates : {e}")
+                    backtest_result = {
+                        'status': 'FALLBACK_ERROR',
+                        'error': str(e),
+                        'execution_time_ms': 0
+                    }
             # ----------------------------------------------
         else:
             logger.warning("No claude_code_instructions returned by agents; skipping backtest.")
