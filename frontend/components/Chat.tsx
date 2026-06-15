@@ -69,7 +69,26 @@ export default function Chat({ onResult }: ChatProps) {
       const data: BacktestResult = await res.json();
       setResult(data);
       onResult(data);
-    } catch (err) {
+
+      // Sauvegarde directe dans localStorage
+      const entry = {
+        id: `${Date.now()}`,
+        savedAt: new Date().toISOString(),
+        intent: data.intent || intent,
+        strategy_name: data.strategy_name || data.intent || intent,
+        status: data.status,
+        metrics: data.metrics,
+        full: data,
+      };
+      try {
+        const raw = localStorage.getItem('qg_strategy_history');
+        const prev = raw ? JSON.parse(raw) : [];
+        const updated = [entry, ...prev].slice(0, 10);
+        localStorage.setItem('qg_strategy_history', JSON.stringify(updated));
+        window.dispatchEvent(new Event('qg_history_updated'));
+      } catch {}
+
+    } catch {
       setError('Connexion impossible — vérifie ta connexion internet ou réessaie dans quelques instants.');
     } finally {
       setLoading(false);

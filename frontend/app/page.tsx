@@ -4,6 +4,7 @@ import Chat from "../components/Chat";
 import PerformanceChart from "../components/PerformanceChart";
 import WhiteBox from "../components/WhiteBox";
 import AuditTrail from "../components/AuditTrail";
+import StrategyHistory from "../components/StrategyHistory";
 
 export interface BacktestResult {
   status: string;
@@ -46,6 +47,7 @@ export default function Home() {
       </div>
       <div className="max-w-4xl mx-auto px-6 py-8 flex flex-col gap-6">
         <Chat onResult={setResult} />
+        <StrategyHistory onLoad={setResult} />
         <PerformanceChart />
         {result && <WhiteBox result={result} />}
         {result && <AuditTrail result={result} />}
