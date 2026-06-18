@@ -1,9 +1,11 @@
 import hashlib
+import json
 import logging
 import os
 import sys
 from typing import Any
 
+import redis
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlmodel import Session
 
@@ -11,6 +13,7 @@ from app.core.db import get_session
 from app.core.rate_limit import limiter
 from app.models.sandbox_log import SandboxLog
 from app.models.strategy import Strategy
+from app.services.data_service import _get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +52,12 @@ _CRYPTO_TOKENS = frozenset({
     "ltc", "bch", "link", "atom", "trx", "usdt", "usdc", "busd",
     "bitcoin", "ethereum", "crypto", "altcoin", "binance", "coinbase",
 })
+
+
+def _pipeline_cache_key(intent: str) -> str:
+    """Cache key for a full /run response, keyed on the normalized intent."""
+    norm = intent.lower().strip()
+    return "pipeline:" + hashlib.sha256(norm.encode()).hexdigest()
 
 
 def _resolve_spread(intent: str) -> float:
@@ -253,6 +262,18 @@ def run_pipeline(
     if not intent or not isinstance(intent, str):
         raise HTTPException(status_code=422, detail="Field 'intent' is required (string).")
 
+    # Demo-day cache: identical intents (e.g. "RSI Bitcoin") replay an instant,
+    # free response instead of re-running the LLM agents + ~40s sandbox. Reuses
+    # data_service._get_redis() — same client, graceful no-op when Redis is down.
+    cache_client = _get_redis()
+    if cache_client is not None:
+        try:
+            cached = cache_client.get(_pipeline_cache_key(intent))
+            if cached:
+                return json.loads(cached)
+        except (redis.RedisError, ValueError) as exc:
+            logger.warning("Pipeline cache read failed: %s", exc)
+
     try:
         agents_response = _run_agents_pipeline(intent)
     except HTTPException:
@@ -417,7 +438,7 @@ except Exception as _qg_exc:
     if executed_code is not None:
         _persist_sandbox_log(session, executed_code, last_sandbox_result or backtest_result)
 
-    return {
+    response_payload = {
         "id": str(strategy.id),
         "status": status,
         "intent": intent,
@@ -432,3 +453,22 @@ except Exception as _qg_exc:
         "error": error_message,
         "pipeline": pipeline_result,
     }
+
+    # Only cache genuinely successful runs: a FALLBACK/ERROR backtest is a
+    # degraded result we must not replay for 48h. backtest_result is None on
+    # rejected/skipped runs, so this also guards those out.
+    if (
+        cache_client is not None
+        and backtest_result is not None
+        and backtest_result.get("status") == "SUCCESS"
+    ):
+        try:
+            cache_client.setex(
+                _pipeline_cache_key(intent),
+                172800,  # TTL 48h
+                json.dumps(response_payload),
+            )
+        except (redis.RedisError, TypeError) as exc:
+            logger.warning("Pipeline cache write failed: %s", exc)
+
+    return response_payload
