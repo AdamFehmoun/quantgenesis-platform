@@ -295,7 +295,7 @@ export default function Chat({ onResult }: ChatProps) {
         <div className="flex gap-2 mb-5 flex-wrap">
           {examples.map((ex) => (
             <button key={ex} onClick={() => setIntent(ex)}
-              className="text-xs px-3 py-1.5 rounded-full transition-all hover:scale-105"
+              className="text-xs px-3 py-1.5 rounded-full transition-all"
               style={{ background: 'rgba(123,57,252,0.12)', color: '#a78bfa', border: '1px solid rgba(123,57,252,0.25)', fontFamily: 'Manrope' }}>
               {ex}
             </button>
@@ -315,7 +315,7 @@ export default function Chat({ onResult }: ChatProps) {
           />
           <button onClick={handleAnalyse} disabled={loading}
             className="px-6 py-3 rounded-xl font-semibold text-sm text-white transition-all disabled:opacity-40 hover:scale-105"
-            style={{ background: '#7b39fc', fontFamily: 'Manrope', boxShadow: loading ? 'none' : '0 0 25px rgba(123,57,252,0.4)' }}>
+            style={{ background: '#7b39fc', fontFamily: 'Manrope', boxShadow: loading ? 'none' : '0 0 12px rgba(123,57,252,0.4)' }}>
             {loading ? (
               <span className="flex items-center gap-2">
                 <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
@@ -328,40 +328,68 @@ export default function Chat({ onResult }: ChatProps) {
           </button>
         </div>
 
-        {/* Agent messages */}
+        {/* Agent messages — le "chat live", cœur du spectacle */}
         {messages.length > 0 && (
-          <div className="mb-5 flex flex-col gap-2.5">
-            {messages.map((msg, i) => (
-              <div key={i} className="flex items-start gap-3 animate-fade-slide">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 mt-0.5"
-                  style={{ background: `${msg.agent.color}20`, border: `1px solid ${msg.agent.color}40` }}>
-                  {msg.agent.avatar}
-                </div>
-                <div className="flex-1 rounded-xl px-4 py-3"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${msg.agent.color}20` }}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold" style={{ color: msg.agent.color, fontFamily: 'Manrope' }}>
-                      {msg.agent.name}
-                    </span>
-                    {msg.done
-                      ? <span className="text-xs" style={{ color: '#22c55e' }}>✓ Complété</span>
-                      : <span className="flex gap-1 ml-1">
-                          {[0, 1, 2].map(d => (
-                            <span key={d} className="w-1 h-1 rounded-full animate-bounce inline-block"
-                              style={{ background: msg.agent.color, animationDelay: `${d * 0.15}s` }} />
-                          ))}
-                        </span>
-                    }
+          <div className="mb-6 flex flex-col gap-3">
+            {messages.map((msg, i) => {
+              const active = !msg.done; // l'agent qui "parle" en ce moment
+              return (
+                <div key={i}
+                  className="flex items-start animate-fade-slide transition-all duration-500"
+                  style={{
+                    gap: active ? '16px' : '12px',
+                    opacity: active ? 1 : 0.5,
+                    transform: active ? 'scale(1)' : 'scale(0.985)',
+                    filter: active ? 'none' : 'saturate(0.7)',
+                  }}>
+                  {/* Avatar — l'actif est plus grand et pulse */}
+                  <div className={`rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-500 ${active ? 'avatar-pulse mt-0.5' : 'mt-1'}`}
+                    style={{
+                      width: active ? '44px' : '32px',
+                      height: active ? '44px' : '32px',
+                      fontSize: active ? '20px' : '14px',
+                      background: active ? `${msg.agent.color}2e` : `${msg.agent.color}18`,
+                      border: `1px solid ${msg.agent.color}${active ? '80' : '33'}`,
+                    }}>
+                    {msg.agent.avatar}
                   </div>
-                  <p className="text-xs leading-relaxed" style={{ color: '#8899AA', fontFamily: 'Inter' }}>
-                    {msg.text}
-                    {msg.text !== msg.fullText && (
-                      <span className="inline-block animate-pulse" style={{ color: msg.agent.color }}>▋</span>
-                    )}
-                  </p>
+                  {/* Bulle — l'actif a un halo lumineux animé, le complété est discret */}
+                  <div className={`flex-1 rounded-xl transition-all duration-500 ${active ? 'active-agent' : ''}`}
+                    style={{
+                      padding: active ? '14px 18px' : '10px 16px',
+                      background: active ? 'rgba(123,57,252,0.10)' : 'rgba(255,255,255,0.025)',
+                      border: `1px solid ${active ? 'rgba(123,57,252,0.55)' : `${msg.agent.color}1a`}`,
+                    }}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="font-bold" style={{ color: msg.agent.color, fontFamily: 'Manrope', fontSize: active ? '14px' : '12px' }}>
+                        {msg.agent.name}
+                      </span>
+                      {msg.done
+                        ? <span className="text-xs" style={{ color: '#22c55e' }}>✓ Complété</span>
+                        : <span className="flex items-center gap-1.5 ml-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                              style={{ background: `${msg.agent.color}22`, color: msg.agent.color, fontFamily: 'Manrope' }}>
+                              En cours
+                            </span>
+                            <span className="flex gap-1">
+                              {[0, 1, 2].map(d => (
+                                <span key={d} className="w-1.5 h-1.5 rounded-full animate-bounce inline-block"
+                                  style={{ background: msg.agent.color, animationDelay: `${d * 0.15}s` }} />
+                              ))}
+                            </span>
+                          </span>
+                      }
+                    </div>
+                    <p className="leading-relaxed" style={{ color: active ? '#c9d3e0' : '#7a899c', fontFamily: 'Inter', fontSize: active ? '13px' : '12px' }}>
+                      {msg.text}
+                      {msg.text !== msg.fullText && (
+                        <span className="inline-block animate-pulse" style={{ color: msg.agent.color }}>▋</span>
+                      )}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div ref={messagesEndRef} />
           </div>
         )}
@@ -375,7 +403,7 @@ export default function Chat({ onResult }: ChatProps) {
             </div>
             <div className="w-full rounded-full h-1" style={{ background: 'rgba(255,255,255,0.06)' }}>
               <div className="h-1 rounded-full transition-all duration-500"
-                style={{ background: 'linear-gradient(90deg, #7b39fc, #06B6D4)', width: `${progressPct}%`, boxShadow: '0 0 10px rgba(123,57,252,0.6)' }} />
+                style={{ background: 'linear-gradient(90deg, #7b39fc, #06B6D4)', width: `${progressPct}%`, boxShadow: '0 0 5px rgba(123,57,252,0.6)' }} />
             </div>
           </div>
         )}
@@ -399,12 +427,17 @@ export default function Chat({ onResult }: ChatProps) {
         {/* Résultats — affichés seulement après reveal (max anim/réponse) */}
         {revealed && result && (
           <div className="mt-2 animate-fade-slide">
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <p className="text-white font-bold" style={{ fontFamily: 'Manrope' }}>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] mb-1" style={{ color: '#7b39fc', fontFamily: 'Manrope' }}>
+                  Résultats du backtest
+                </p>
+                <p className="text-white font-bold text-lg" style={{ fontFamily: 'Manrope' }}>
                   {result.strategy_name || result.intent || 'Résultats'}
                 </p>
-                <p className="text-xs mt-0.5" style={{ color: '#555', fontFamily: 'Inter' }}>Backtest terminé</p>
+                <p className="text-xs mt-0.5" style={{ color: '#555', fontFamily: 'Inter' }}>
+                  Backtest terminé · {result.metrics.num_trades} trades
+                </p>
               </div>
               <span className="text-xs px-3 py-1.5 rounded-full font-semibold"
                 style={{
@@ -417,26 +450,95 @@ export default function Chat({ onResult }: ChatProps) {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: 'Sharpe Ratio', value: result.metrics.sharpe_ratio, color: '#a78bfa', icon: '📈' },
-                { label: 'Max Drawdown', value: `-${Math.abs(result.metrics.max_drawdown_pct)}%`, color: '#F87171', icon: '📉' },
-                { label: 'Total Return', value: `+${result.metrics.total_return_pct}%`, color: '#22c55e', icon: '💰' },
-                { label: 'Win Rate', value: `${result.metrics.win_rate_pct}%`, color: '#06B6D4', icon: '🎯' },
-              ].map((m) => (
-                <div key={m.label} className="rounded-xl p-4 transition-all hover:scale-[1.02]"
-                  style={{ background: 'rgba(123,57,252,0.06)', border: '1px solid rgba(123,57,252,0.15)' }}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span>{m.icon}</span>
-                    <p className="text-xs" style={{ color: '#666', fontFamily: 'Inter' }}>{m.label}</p>
+            {/* HERO METRIC — Total Return, le chiffre que le jury regarde */}
+            {(() => {
+              const tr = result.metrics.total_return_pct;
+              const positive = tr >= 0;
+              const accent = positive ? '#22c55e' : '#F87171';
+              return (
+                <div className="rounded-2xl p-7 mb-4 relative overflow-hidden animate-metric-pop"
+                  style={{
+                    background: `linear-gradient(135deg, ${positive ? 'rgba(34,197,94,0.10)' : 'rgba(248,113,113,0.10)'} 0%, rgba(123,57,252,0.06) 100%)`,
+                    border: `1px solid ${positive ? 'rgba(34,197,94,0.28)' : 'rgba(248,113,113,0.28)'}`,
+                  }}>
+                  {/* glow décoratif */}
+                  <div className="absolute pointer-events-none" style={{
+                    top: '-40%', right: '-10%', width: '320px', height: '320px', borderRadius: '50%',
+                    background: `radial-gradient(circle, ${positive ? 'rgba(34,197,94,0.18)' : 'rgba(248,113,113,0.18)'} 0%, transparent 70%)`,
+                    filter: 'blur(20px)',
+                  }} />
+                  <div className="relative flex items-end justify-between flex-wrap gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xl">💰</span>
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: '#9aa7b8', fontFamily: 'Manrope' }}>
+                          Total Return
+                        </p>
+                      </div>
+                      <p className={`font-bold leading-none ${positive ? 'hero-number-glow' : ''}`}
+                        style={{ color: accent, fontFamily: 'Manrope', fontSize: 'clamp(3.2rem, 9vw, 5rem)', letterSpacing: '-0.03em' }}>
+                        {positive ? '+' : ''}{tr}<span style={{ fontSize: '0.4em', opacity: 0.7 }}>%</span>
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs mb-1" style={{ color: '#667', fontFamily: 'Inter' }}>Performance globale</p>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold"
+                        style={{ background: `${accent}1f`, color: accent, border: `1px solid ${accent}55`, fontFamily: 'Manrope' }}>
+                        {positive ? '▲ Gain' : '▼ Perte'}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-2xl font-bold" style={{ color: m.color, fontFamily: 'Manrope' }}>{m.value}</p>
+                </div>
+              );
+            })()}
+
+            {/* MÉTRIQUES SECONDAIRES — plus grandes, couleurs sémantiques, jauges */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  label: 'Sharpe Ratio', icon: '📈', color: '#a78bfa',
+                  value: `${result.metrics.sharpe_ratio}`,
+                  pct: Math.min(Math.max(result.metrics.sharpe_ratio, 0) / 4 * 100, 100),
+                  hint: 'rendement / risque',
+                },
+                {
+                  label: 'Max Drawdown', icon: '📉', color: '#F87171',
+                  value: `-${Math.abs(result.metrics.max_drawdown_pct)}%`,
+                  pct: Math.min(Math.abs(result.metrics.max_drawdown_pct), 100),
+                  hint: 'perte maximale',
+                },
+                {
+                  label: 'Win Rate', icon: '🎯', color: '#06B6D4',
+                  value: `${result.metrics.win_rate_pct}%`,
+                  pct: Math.min(Math.max(result.metrics.win_rate_pct, 0), 100),
+                  hint: 'trades gagnants',
+                },
+              ].map((m, idx) => (
+                <div key={m.label} className="rounded-xl p-5 transition-all hover:scale-[1.03] animate-metric-pop"
+                  style={{
+                    background: `linear-gradient(160deg, ${m.color}10 0%, rgba(255,255,255,0.02) 100%)`,
+                    border: `1px solid ${m.color}2e`,
+                    animationDelay: `${0.08 * (idx + 1)}s`,
+                  }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-base">{m.icon}</span>
+                    <p className="text-xs font-medium" style={{ color: '#8a96a8', fontFamily: 'Inter' }}>{m.label}</p>
+                  </div>
+                  <p className="font-bold mb-3" style={{ color: m.color, fontFamily: 'Manrope', fontSize: '2.1rem', letterSpacing: '-0.02em', textShadow: `0 0 12px ${m.color}55` }}>
+                    {m.value}
+                  </p>
+                  {/* jauge contextuelle */}
+                  <div className="w-full rounded-full h-1.5 overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                    <div className="h-1.5 rounded-full animate-gauge"
+                      style={{ width: `${m.pct}%`, background: `linear-gradient(90deg, ${m.color}, ${m.color}aa)`, boxShadow: `0 0 5px ${m.color}88` }} />
+                  </div>
+                  <p className="text-[10px] mt-2" style={{ color: '#556', fontFamily: 'Inter' }}>{m.hint}</p>
                 </div>
               ))}
             </div>
 
             {getWarning(result.metrics) && (
-              <div className="mt-3 p-3 rounded-xl text-xs"
+              <div className="mt-4 p-3 rounded-xl text-xs"
                 style={{ background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.2)', color: '#FAC775', fontFamily: 'Inter' }}>
                 {getWarning(result.metrics)}
               </div>

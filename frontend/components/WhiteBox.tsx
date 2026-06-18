@@ -64,7 +64,7 @@ export default function WhiteBox({ result }: WhiteBoxProps) {
             </div>
             <button onClick={handleExport}
               className="w-full py-3 rounded-xl font-semibold text-sm text-white transition-all hover:scale-[1.01]"
-              style={{ background: '#7b39fc', fontFamily: 'Manrope', boxShadow: '0 0 25px rgba(123,57,252,0.3)' }}>
+              style={{ background: '#7b39fc', fontFamily: 'Manrope', boxShadow: '0 0 12px rgba(123,57,252,0.3)' }}>
               ⬇ Exporter strategy.py
             </button>
           </>
