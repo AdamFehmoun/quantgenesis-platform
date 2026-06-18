@@ -1,4 +1,5 @@
 'use client';
+import { ScrollText } from 'lucide-react';
 import { BacktestResult } from '../app/page';
 
 interface AuditTrailProps {
@@ -21,7 +22,9 @@ export default function AuditTrail({ result }: AuditTrailProps) {
 
       <div className="px-6 py-4 flex items-center gap-3"
         style={{ borderBottom: '1px solid rgba(123,57,252,0.12)', background: 'rgba(123,57,252,0.05)' }}>
-        <span className="text-sm font-semibold text-white" style={{ fontFamily: 'Manrope' }}>🕓 Audit Trail</span>
+        <span className="flex items-center gap-2 text-sm font-semibold text-white" style={{ fontFamily: 'Manrope' }}>
+          <ScrollText size={16} color="#a78bfa" strokeWidth={2} /> Audit Trail
+        </span>
         <span className="text-xs" style={{ color: '#666', fontFamily: 'Inter' }}>
           Décisions agents IA — traçabilité complète
           {pipelineStart && ` · Démarré à ${pipelineStart}`}

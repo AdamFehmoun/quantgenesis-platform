@@ -1,18 +1,23 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import {
+  Brain, ClipboardList, Cog, Code2, Scale, Target,
+  Coins, TrendingUp, TrendingDown, AlertTriangle,
+  type LucideIcon,
+} from 'lucide-react';
 import { BacktestResult } from '../app/page';
 
 interface ChatProps {
   onResult: (result: BacktestResult) => void;
 }
 
-const AGENTS = [
-  { name: 'Brainstormer', role: 'Analyse de l\'intention et identification des marchés cibles...', avatar: '🧠', color: '#7b39fc' },
-  { name: 'ChefProjet', role: 'Définition des contraintes et architecture de la stratégie...', avatar: '📋', color: '#6366f1' },
-  { name: 'Architecte', role: 'Construction du modèle mathématique et des indicateurs...', avatar: '⚙️', color: '#0891B2' },
-  { name: 'Codeur', role: 'Génération du code Python VectorBT optimisé...', avatar: '💻', color: '#059669' },
-  { name: 'Conformité', role: 'Vérification de la conformité réglementaire et du log AI Act (Article 12)...', avatar: '⚖️', color: '#D97706' },
-  { name: 'Critique', role: 'Validation des résultats et détection des biais statistiques...', avatar: '🎯', color: '#DC2626' },
+const AGENTS: { name: string; role: string; Icon: LucideIcon; color: string }[] = [
+  { name: 'Brainstormer', role: 'Analyse de l\'intention et identification des marchés cibles...', Icon: Brain, color: '#7b39fc' },
+  { name: 'ChefProjet', role: 'Définition des contraintes et architecture de la stratégie...', Icon: ClipboardList, color: '#6366f1' },
+  { name: 'Architecte', role: 'Construction du modèle mathématique et des indicateurs...', Icon: Cog, color: '#0891B2' },
+  { name: 'Codeur', role: 'Génération du code Python VectorBT optimisé...', Icon: Code2, color: '#059669' },
+  { name: 'Conformité', role: 'Vérification de la conformité réglementaire et du log AI Act (Article 12)...', Icon: Scale, color: '#D97706' },
+  { name: 'Critique', role: 'Validation des résultats et détection des biais statistiques...', Icon: Target, color: '#DC2626' },
 ];
 
 type Agent = (typeof AGENTS)[number];
@@ -134,11 +139,58 @@ export default function Chat({ onResult }: ChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const runIdRef = useRef(0);
   const errorRef = useRef<string | null>(null);
+  // Vrai run déjà déclenché ? → coupe l'ambiance et empêche toute reprise.
+  const startedRealRunRef = useRef(false);
+  // Jeton de la boucle d'ambiance : tout incrément invalide les timers en vol.
+  const ambianceTokenRef = useRef(0);
 
-  // Auto-scroll
+  // Auto-scroll — UNIQUEMENT pour un vrai run (pas en mode ambiance, pour ne
+  // pas tirer le viewport tout seul tant que personne n'a interagi).
   useEffect(() => {
+    if (!startedRealRunRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // --- MODE AMBIANCE (état "vierge" initial) -------------------------------
+  // Boucle PUREMENT visuelle : AUCUN fetch, AUCUN appel réseau. Les 6 agents
+  // s'illuminent à tour de rôle avec leur phrase générique + effet typing, en
+  // boucle douce — exactement le rendu de la vraie démo, mais sans run.
+  // S'active seulement tant qu'aucun vrai run n'a été lancé et qu'aucun
+  // résultat/erreur n'est affiché. Se coupe net dès handleAnalyse et au unmount.
+  useEffect(() => {
+    if (startedRealRunRef.current) return;   // un vrai run a eu lieu → jamais de reprise
+    if (loading || result || error) return;  // vrai run en cours / résultat affiché
+
+    const myToken = ++ambianceTokenRef.current;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    const alive = () => ambianceTokenRef.current === myToken && !startedRealRunRef.current;
+    const at = (fn: () => void, ms: number) => {
+      timeouts.push(setTimeout(() => { if (alive()) fn(); }, ms));
+    };
+
+    const cycle = () => {
+      if (!alive()) return;
+      setMessages([]);
+      AGENTS.forEach((agent, i) => {
+        at(() => {
+          setMessages((prev) => {
+            const next = prev.map((m) => ({ ...m, done: true }));
+            next.push({ agent, done: false, text: '', fullText: agent.role });
+            return next;
+          });
+        }, i * AGENT_INTERVAL);
+      });
+      // Pause sur le dernier agent (le temps qu'il finisse de "taper"), puis relance.
+      at(cycle, AGENTS.length * AGENT_INTERVAL + 2200);
+    };
+
+    cycle();
+
+    return () => {
+      ambianceTokenRef.current++;        // invalide les timers en vol
+      timeouts.forEach(clearTimeout);    // pas de fuite, pas de double boucle
+    };
+  }, [loading, result, error]);
 
   // Effet "typing" : fait converger text → fullText pour chaque message.
   useEffect(() => {
@@ -191,6 +243,9 @@ export default function Chat({ onResult }: ChatProps) {
 
   const handleAnalyse = async () => {
     if (!intent.trim() || loading) return;
+    // Coupe immédiatement la boucle d'ambiance et empêche toute reprise future.
+    startedRealRunRef.current = true;
+    ambianceTokenRef.current++;
     const myRun = ++runIdRef.current;
     errorRef.current = null;
     setLoading(true);
@@ -347,11 +402,13 @@ export default function Chat({ onResult }: ChatProps) {
                     style={{
                       width: active ? '44px' : '32px',
                       height: active ? '44px' : '32px',
-                      fontSize: active ? '20px' : '14px',
                       background: active ? `${msg.agent.color}2e` : `${msg.agent.color}18`,
                       border: `1px solid ${msg.agent.color}${active ? '80' : '33'}`,
                     }}>
-                    {msg.agent.avatar}
+                    {(() => {
+                      const Icon = msg.agent.Icon;
+                      return <Icon size={active ? 22 : 15} color={msg.agent.color} strokeWidth={2} />;
+                    })()}
                   </div>
                   {/* Bulle — l'actif a un halo lumineux animé, le complété est discret */}
                   <div className={`flex-1 rounded-xl transition-all duration-500 ${active ? 'active-agent' : ''}`}
@@ -420,7 +477,10 @@ export default function Chat({ onResult }: ChatProps) {
         {revealed && result && isFallback && (
           <div className="p-3 rounded-xl text-sm mb-4"
             style={{ background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.25)', color: '#FAC775', fontFamily: 'Inter' }}>
-            ⚠️ Stratégie de secours (FALLBACK) — métriques partielles.
+            <span className="flex items-center gap-2">
+              <AlertTriangle size={15} color="#FAC775" strokeWidth={2} className="flex-shrink-0" />
+              Stratégie de secours (FALLBACK) — métriques partielles.
+            </span>
           </div>
         )}
 
@@ -470,7 +530,7 @@ export default function Chat({ onResult }: ChatProps) {
                   <div className="relative flex items-end justify-between flex-wrap gap-4">
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xl">💰</span>
+                        <Coins size={20} color="#9aa7b8" strokeWidth={2} />
                         <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: '#9aa7b8', fontFamily: 'Manrope' }}>
                           Total Return
                         </p>
@@ -496,24 +556,26 @@ export default function Chat({ onResult }: ChatProps) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
                 {
-                  label: 'Sharpe Ratio', icon: '📈', color: '#a78bfa',
+                  label: 'Sharpe Ratio', Icon: TrendingUp, color: '#a78bfa',
                   value: `${result.metrics.sharpe_ratio}`,
                   pct: Math.min(Math.max(result.metrics.sharpe_ratio, 0) / 4 * 100, 100),
                   hint: 'rendement / risque',
                 },
                 {
-                  label: 'Max Drawdown', icon: '📉', color: '#F87171',
+                  label: 'Max Drawdown', Icon: TrendingDown, color: '#F87171',
                   value: `-${Math.abs(result.metrics.max_drawdown_pct)}%`,
                   pct: Math.min(Math.abs(result.metrics.max_drawdown_pct), 100),
                   hint: 'perte maximale',
                 },
                 {
-                  label: 'Win Rate', icon: '🎯', color: '#06B6D4',
+                  label: 'Win Rate', Icon: Target, color: '#06B6D4',
                   value: `${result.metrics.win_rate_pct}%`,
                   pct: Math.min(Math.max(result.metrics.win_rate_pct, 0), 100),
                   hint: 'trades gagnants',
                 },
-              ].map((m, idx) => (
+              ].map((m, idx) => {
+                const Icon = m.Icon;
+                return (
                 <div key={m.label} className="rounded-xl p-5 transition-all hover:scale-[1.03] animate-metric-pop"
                   style={{
                     background: `linear-gradient(160deg, ${m.color}10 0%, rgba(255,255,255,0.02) 100%)`,
@@ -521,7 +583,7 @@ export default function Chat({ onResult }: ChatProps) {
                     animationDelay: `${0.08 * (idx + 1)}s`,
                   }}>
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-base">{m.icon}</span>
+                    <Icon size={16} color={m.color} strokeWidth={2} />
                     <p className="text-xs font-medium" style={{ color: '#8a96a8', fontFamily: 'Inter' }}>{m.label}</p>
                   </div>
                   <p className="font-bold mb-3" style={{ color: m.color, fontFamily: 'Manrope', fontSize: '2.1rem', letterSpacing: '-0.02em', textShadow: `0 0 12px ${m.color}55` }}>
@@ -534,7 +596,8 @@ export default function Chat({ onResult }: ChatProps) {
                   </div>
                   <p className="text-[10px] mt-2" style={{ color: '#556', fontFamily: 'Inter' }}>{m.hint}</p>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {getWarning(result.metrics) && (

@@ -1,5 +1,6 @@
 'use client';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { BarChart3 } from 'lucide-react';
 import type { BacktestResult } from '../app/page';
 
 const tooltipStyle = {
@@ -25,7 +26,9 @@ export default function PerformanceChart({ result }: PerformanceChartProps) {
 
       <div className="px-6 py-4 flex items-center gap-3"
         style={{ borderBottom: '1px solid rgba(123,57,252,0.12)', background: 'rgba(123,57,252,0.05)' }}>
-        <span className="text-sm font-semibold text-white" style={{ fontFamily: 'Manrope' }}>📊 Performance du portefeuille</span>
+        <span className="flex items-center gap-2 text-sm font-semibold text-white" style={{ fontFamily: 'Manrope' }}>
+          <BarChart3 size={16} color="#a78bfa" strokeWidth={2} /> Performance du portefeuille
+        </span>
       </div>
 
       {!hasData ? (
