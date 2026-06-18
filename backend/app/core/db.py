@@ -43,6 +43,15 @@ _ADDITIVE_MIGRATIONS: tuple[str, ...] = (
     "ALTER TABLE sandbox_logs ALTER COLUMN sharpe_ratio DROP NOT NULL",
     "ALTER TABLE sandbox_logs ALTER COLUMN max_drawdown_pct DROP NOT NULL",
     "ALTER TABLE sandbox_logs ALTER COLUMN total_return_pct DROP NOT NULL",
+    # Arbitrage 2026-06-06 : suppression des doublons `drawdown` / `num_trades`
+    # (et de l'ancien `return`) côté modèle. Les colonnes peuvent encore exister
+    # en prod, provisionnées par une ancienne version. On les relâche en NULLable
+    # pour que les INSERT (qui ne les mentionnent plus) ne tombent pas sur un
+    # NOT NULL constraint. On ne DROP PAS la colonne ici : trop risqué tant que
+    # rien ne garantit qu'aucun consommateur historique ne la lit encore.
+    "ALTER TABLE sandbox_logs ALTER COLUMN drawdown DROP NOT NULL",
+    "ALTER TABLE sandbox_logs ALTER COLUMN num_trades DROP NOT NULL",
+    'ALTER TABLE sandbox_logs ALTER COLUMN "return" DROP NOT NULL',
 )
 
 
@@ -51,19 +60,24 @@ def init_db() -> None:
 
     SQLModel.metadata.create_all(engine)
 
-    # Light additive migrations. We don't pull Alembic for three nullable columns,
-    # but we still need the prod table to gain them at boot. Each statement is
-    # `IF NOT EXISTS` so re-running the lifespan is safe.
+    # Light additive migrations. We don't pull Alembic for a handful of nullable
+    # columns, but we still need the prod table to gain them at boot. Each
+    # statement is wrapped in its own transaction : Postgres aborts the whole
+    # transaction on the first failing statement, so a single shared `begin()`
+    # would silently skip every migration after the first miss. Per-statement
+    # isolation keeps each migration fail-open and idempotent.
     from sqlalchemy import text
 
-    with engine.begin() as conn:
-        for stmt in _ADDITIVE_MIGRATIONS:
-            try:
+    for stmt in _ADDITIVE_MIGRATIONS:
+        try:
+            with engine.begin() as conn:
                 conn.execute(text(stmt))
-            except Exception:
-                # SQLite (used in some local test setups) doesn't grok IF NOT EXISTS
-                # on ADD COLUMN — fail open, the schema there is rebuilt on each run.
-                pass
+        except Exception:
+            # SQLite (local test setups) doesn't grok IF NOT EXISTS on ADD
+            # COLUMN ; Postgres barks on ALTER COLUMN x DROP NOT NULL when the
+            # legacy column was never provisioned. Fail open in both cases :
+            # the migration is purely advisory, the model+create_all is truth.
+            pass
 
 
 def get_session() -> Generator[Session, None, None]:

@@ -14,7 +14,7 @@ _EMPTY_METRICS: dict[str, float | int] = {
     "sharpe_ratio": 0.0,
     "max_drawdown_pct": 0.0,
     "total_return_pct": 0.0,
-    "num_trades": 0,
+    "trades_count": 0,
     "win_rate_pct": 0.0,
 }
 

@@ -16,7 +16,7 @@ _REQUIRED_METRIC_KEYS = {
     "sharpe_ratio",
     "max_drawdown_pct",
     "total_return_pct",
-    "num_trades",
+    "trades_count",
     "win_rate_pct",
 }
 
@@ -74,7 +74,7 @@ def test_pipeline_run_happy_path(
 
     # sanity-check: backtest metrics propagated from the (stubbed) sandbox
     assert metrics["sharpe_ratio"] == pytest.approx(1.42, abs=0.01)
-    assert metrics["num_trades"] == 17
+    assert metrics["trades_count"] == 17
 
     # downstream contract sanity
     assert body["intent"] == "RSI Bitcoin"

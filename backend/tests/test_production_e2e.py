@@ -118,17 +118,22 @@ def _assert_full_spec(body: dict[str, Any], call_idx: int) -> None:
         "sharpe_ratio",
         "max_drawdown_pct",
         "total_return_pct",
-        "num_trades",
+        "trades_count",
         "win_rate_pct",
     }
     missing_metrics = required_metrics - set(metrics.keys())
     assert not missing_metrics, (
         f"call #{call_idx}: metrics missing keys: {sorted(missing_metrics)}"
     )
-    for key in required_metrics:
-        assert isinstance(metrics[key], (int, float)), (
-            f"call #{call_idx}: metrics[{key!r}] must be numeric, got {type(metrics[key]).__name__}"
-        )
+    # Sur un run SUCCESS, toutes les métriques sont numériques. Sur FALLBACK /
+    # rejected, elles sont volontairement remontées à None (contrat de fallback)
+    # — on ne valide alors que la présence des clés, pas le typage.
+    if body["status"] == "success":
+        for key in required_metrics:
+            assert isinstance(metrics[key], (int, float)), (
+                f"call #{call_idx}: metrics[{key!r}] must be numeric on success, "
+                f"got {type(metrics[key]).__name__}"
+            )
 
     # B-E2E-SHARPE: a successful pipeline must produce a real Sharpe ratio
     # (the sandbox timeout incident used to ship zeros silently). We only

@@ -23,7 +23,23 @@ router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
 _STATUS_MAP = {"SUCCESS": "success", "REJECTED": "rejected", "ERROR": "error"}
 
-_METRIC_KEYS = ("sharpe_ratio", "max_drawdown_pct", "total_return_pct", "num_trades", "win_rate_pct")
+# Canonical metric envelope (arbitrage du 06/06/2026) :
+#   max_drawdown_pct / total_return_pct / trades_count.
+_METRIC_KEYS = (
+    "sharpe_ratio",
+    "max_drawdown_pct",
+    "total_return_pct",
+    "trades_count",
+    "win_rate_pct",
+)
+
+# Backtest status surfaced in `backtest.status` (contrat Maxime) :
+#   SUCCESS  — exécution réelle, métriques fiables (non nulles)
+#   FALLBACK — retries épuisés, template a pris le relais : métriques null
+#   ERROR    — exécution KO, pas de métriques (null également)
+_BACKTEST_SUCCESS = "SUCCESS"
+_BACKTEST_FALLBACK = "FALLBACK"
+_BACKTEST_ERROR = "ERROR"
 
 _SPREAD_EQUITY_US = 0.0001
 _SPREAD_CRYPTO = 0.0005
@@ -71,7 +87,7 @@ def _run_sandbox_backtest(code: str, spread: float = _SPREAD_EQUITY_US) -> dict[
         from sandbox.executor import run_backtest as _run_backtest  # type: ignore[import-not-found]
     except ImportError as exc:
         logger.warning("sandbox.executor unavailable: %s", exc)
-        return {"status": "ERROR", "stderr": f"sandbox.executor import failed: {exc}"}
+        return {"status": _BACKTEST_ERROR, "stderr": f"sandbox.executor import failed: {exc}"}
 
     try:
         return _run_backtest(code, spread=spread)
@@ -79,7 +95,7 @@ def _run_sandbox_backtest(code: str, spread: float = _SPREAD_EQUITY_US) -> dict[
         return _run_backtest(code)
     except Exception as exc:
         logger.warning("sandbox.executor raised: %s", exc)
-        return {"status": "ERROR", "stderr": str(exc)}
+        return {"status": _BACKTEST_ERROR, "stderr": str(exc)}
 
 
 def _optional_float(value: Any) -> float | None:
@@ -106,12 +122,12 @@ def _optional_int(value: Any) -> int | None:
 
 
 def _normalize_backtest_metrics(backtest_result: dict[str, Any] | None) -> dict[str, Any]:
-    """Reconcile the two executor shapes.
+    """Reconcile the two executor shapes onto the canonical envelope.
 
     Mathis' executor emits raw fractions under `drawdown` / `return` (pf.max_drawdown()
     and pf.total_return() return 0..1 floats). Older callers — and our frontend
-    contract — expect `max_drawdown_pct` / `total_return_pct` in percent. This
-    helper accepts either, returns the canonical *_pct envelope.
+    contract — expect `max_drawdown_pct` / `total_return_pct` in percent, and
+    `trades_count` (anciennement `num_trades`). Accepts either shape.
 
     Returns a dict with potentially-null floats so the persistence layer can tell
     "missing" apart from "exactly zero".
@@ -124,12 +140,33 @@ def _normalize_backtest_metrics(backtest_result: dict[str, Any] | None) -> dict[
         raw = _optional_float(src.get(key_raw))
         return None if raw is None else raw * 100.0
 
+    # trades_count : accepte les deux noms en entrée (rétro-compat sandbox).
+    trades_raw = src.get("trades_count")
+    if trades_raw is None:
+        trades_raw = src.get("num_trades")
+
     return {
         "sharpe_ratio": _optional_float(src.get("sharpe_ratio")),
         "max_drawdown_pct": _pct("max_drawdown_pct", "drawdown"),
         "total_return_pct": _pct("total_return_pct", "return"),
-        "num_trades": _optional_int(src.get("num_trades")),
+        "trades_count": _optional_int(trades_raw),
     }
+
+
+def _classify_backtest_status(backtest_result: dict[str, Any] | None) -> str:
+    """Coerce le statut brut renvoyé par la sandbox vers le contrat Maxime.
+
+    Trois valeurs publiques : SUCCESS, FALLBACK, ERROR. Tout statut inconnu est
+    remonté comme ERROR (fail-safe : on ne ment pas au front).
+    """
+    if not backtest_result:
+        return _BACKTEST_ERROR
+    raw = str(backtest_result.get("status") or "").upper()
+    if raw == _BACKTEST_SUCCESS:
+        return _BACKTEST_SUCCESS
+    if raw == _BACKTEST_FALLBACK:
+        return _BACKTEST_FALLBACK
+    return _BACKTEST_ERROR
 
 
 def _persist_sandbox_log(
@@ -140,10 +177,10 @@ def _persist_sandbox_log(
     """B-LOGS-SANDBOX: persist one row per sandbox run.
 
     Aligned on Mathis' official SandboxLog schema (commit c7ca780) extended in
-    S3 / Task 2 with the full metrics envelope (drawdown / return / trades):
+    S3 / Task 2 with the canonical metrics envelope :
       - status, execution_time_ms, code_hash, memory_used_mb : NOT NULL
       - sharpe_ratio, error_type                             : nullable
-      - max_drawdown_pct, total_return_pct, trades_count     : nullable (S3)
+      - max_drawdown_pct, total_return_pct, trades_count     : nullable
 
     code_hash = sha256(code)[:32] so identical runs share the same hash for
     correlation. memory_used_mb defaults to 0.0 (NOT NULL in the table).
@@ -161,7 +198,7 @@ def _persist_sandbox_log(
             sharpe_ratio=normalized["sharpe_ratio"],
             max_drawdown_pct=normalized["max_drawdown_pct"],
             total_return_pct=normalized["total_return_pct"],
-            trades_count=normalized["num_trades"],
+            trades_count=normalized["trades_count"],
             execution_time_ms=int(backtest_result.get("execution_time_ms", 0) or 0),
             memory_used_mb=float(backtest_result.get("memory_used_mb") or 0.0),
             code_hash=code_hash,
@@ -173,21 +210,35 @@ def _persist_sandbox_log(
         session.rollback()
 
 
-def _build_metrics(backtest_result: dict[str, Any] | None) -> dict[str, float | int]:
-    """Shape the metrics object expected by the frontend, rounded to 2 decimals.
+def _build_metrics(
+    backtest_result: dict[str, Any] | None,
+    backtest_status: str,
+) -> dict[str, float | int | None]:
+    """Shape l'enveloppe metrics renvoyée au frontend.
 
-    Routed through the same normalizer as the SandboxLog persistence path so
-    the API response and the persisted row are guaranteed to agree, even when
-    the executor switches between raw-fraction (`drawdown`) and pct shapes.
+    Règle FALLBACK / ERROR : on remonte explicitement `None` pour toutes les
+    métriques numériques au lieu de zéros trompeurs. Le frontend a déjà la
+    logique pour afficher "n/a" quand un champ est null. Le contrat de clés
+    (5 champs) reste constant pour ne pas casser les sérialisations existantes.
     """
+    if backtest_status != _BACKTEST_SUCCESS:
+        return {
+            "sharpe_ratio": None,
+            "max_drawdown_pct": None,
+            "total_return_pct": None,
+            "trades_count": None,
+            "win_rate_pct": None,
+        }
+
     normalized = _normalize_backtest_metrics(backtest_result)
     result = backtest_result or {}
+    win_rate = _optional_float(result.get("win_rate_pct"))
     return {
-        "sharpe_ratio": round(normalized["sharpe_ratio"] or 0.0, 2),
-        "max_drawdown_pct": round(normalized["max_drawdown_pct"] or 0.0, 2),
-        "total_return_pct": round(normalized["total_return_pct"] or 0.0, 2),
-        "num_trades": normalized["num_trades"] or 0,
-        "win_rate_pct": round(float(result.get("win_rate_pct", 0.0) or 0.0), 2),
+        "sharpe_ratio": round(normalized["sharpe_ratio"], 2) if normalized["sharpe_ratio"] is not None else None,
+        "max_drawdown_pct": round(normalized["max_drawdown_pct"], 2) if normalized["max_drawdown_pct"] is not None else None,
+        "total_return_pct": round(normalized["total_return_pct"], 2) if normalized["total_return_pct"] is not None else None,
+        "trades_count": normalized["trades_count"],
+        "win_rate_pct": round(win_rate, 2) if win_rate is not None else None,
     }
 
 
@@ -202,7 +253,14 @@ def run_pipeline(
     if not intent or not isinstance(intent, str):
         raise HTTPException(status_code=422, detail="Field 'intent' is required (string).")
 
-    agents_response = _run_agents_pipeline(intent)
+    try:
+        agents_response = _run_agents_pipeline(intent)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Agents pipeline crashed for intent=%r", intent)
+        raise HTTPException(status_code=500, detail=f"Agents pipeline crashed: {exc}") from exc
+
     raw_status = (agents_response or {}).get("status", "ERROR")
     pipeline_result = (agents_response or {}).get("result") or {}
     error_message = (agents_response or {}).get("error")
@@ -222,6 +280,10 @@ def run_pipeline(
 
     backtest_result: dict[str, Any] | None = None
     executed_code: str | None = None
+    # `last_sandbox_result` garde la dernière réponse brute de la sandbox pour
+    # la persistance SandboxLog (audit). `backtest_result` peut être réécrit
+    # en FALLBACK pour l'enveloppe API. Voir la boucle plus bas.
+    last_sandbox_result: dict[str, Any] | None = None
     if status == "success":
         # On récupère le code généré par l'agent Codeur
         from agents.codeur import generate_code
@@ -236,47 +298,101 @@ print(f'DRAWDOWN:{float(pf.max_drawdown()):.4f}')
 print(f'RETURN:{float(pf.total_return()):.4f}')
 print(f'TRADES:{int(pf.trades.count() if hasattr(pf, "trades") else 0)}')
 print(f'WINRATE:{float(pf.trades.win_rate() * 100):.2f}')
+
+# --- Injection chart_data (série temporelle pour graphe front, Maxime) ---
+# Sous-échantillonnage stride uniforme : borne dure ~200 points, robuste à
+# n'importe quelle fréquence (1h crypto -> 1d equity), pas de biais d'agrégation
+# (le pic de drawdown est préservé, ce qu'un resample.mean() lisserait).
+import json as _qg_json
+try:
+    _qg_val = pf.value()
+    _qg_dd = pf.drawdown()
+    _qg_n = len(_qg_val)
+    _QG_TARGET = 200
+    _qg_step = max(1, _qg_n // _QG_TARGET)
+    _qg_val_ds = _qg_val.iloc[::_qg_step].fillna(0.0)
+    _qg_dd_ds = _qg_dd.iloc[::_qg_step].fillna(0.0)
+    _qg_chart = [
+        {
+            'date': _qg_idx.strftime('%Y-%m-%d'),
+            'value': float(_qg_v),
+            'drawdown': float(_qg_d) * 100.0,
+        }
+        for _qg_idx, _qg_v, _qg_d in zip(_qg_val_ds.index, _qg_val_ds.values, _qg_dd_ds.values)
+    ]
+    print('CHART_DATA:' + _qg_json.dumps(_qg_chart))
+except Exception as _qg_exc:
+    print(f'CHART_DATA_ERROR:{type(_qg_exc).__name__}: {_qg_exc}')
 """
             executed_code = code
             # --- MATHIS S3 : BOUCLE RETRY ET FALLBACK ---
+            # On garde séparés :
+            #   - `last_sandbox_result` : le DERNIER retour brut de la sandbox
+            #     (audit / SandboxLog → garde la vraie cause d'erreur)
+            #   - `backtest_result`     : l'enveloppe renvoyée au frontend
+            #     (passe à FALLBACK si retries épuisés, contrat Maxime)
             MAX_RETRIES = 2
             attempt = 0
             success = False
-            
+
             while attempt <= MAX_RETRIES and not success:
                 attempt += 1
                 logger.info(f"[Sandbox] Exécution tentative {attempt}/{MAX_RETRIES + 1}")
-                
-                backtest_result = _run_sandbox_backtest(code, spread=spread)
-                
+
+                try:
+                    last_sandbox_result = _run_sandbox_backtest(code, spread=spread)
+                except Exception as exc:
+                    logger.exception("[Sandbox] Tentative %s crashée", attempt)
+                    last_sandbox_result = {"status": _BACKTEST_ERROR, "error": f"executor_crashed: {exc}"}
+
                 # On considère le run comme un succès s'il y a un retour de la sandbox avec SUCCESS
-                if backtest_result and backtest_result.get('status') == 'SUCCESS':
+                if last_sandbox_result and last_sandbox_result.get('status') == _BACKTEST_SUCCESS:
                     success = True
                     logger.info(f"[Sandbox] Tentative {attempt} réussie.")
                 else:
-                    error_type = backtest_result.get('error', 'unknown') if backtest_result else "unknown"
+                    error_type = last_sandbox_result.get('error', 'unknown') if last_sandbox_result else "unknown"
                     logger.warning(f"[Sandbox] Échec tentative {attempt}. Raison: {error_type}")
-                    
+
                     # Règle de sécurité : On ne retry jamais si c'est une violation de sécurité
                     if error_type == 'security_violation':
                         logger.error("[Sandbox] Violation de sécurité détectée, annulation immédiate des retries.")
                         break
-            
-            # Si toutes les tentatives échouent (erreurs de syntaxe ou crash du code)
-            if not success:
+
+            if success:
+                backtest_result = last_sandbox_result
+            else:
+                # Toutes les tentatives ont échoué : on renvoie un signal FALLBACK
+                # explicite au front (Maxime affiche un badge dédié + métriques null),
+                # mais on conserve la dernière erreur sandbox pour l'audit (SandboxLog).
                 logger.warning("[Sandbox] Toutes les tentatives ont échoué. Déclenchement du signal FALLBACK.")
-                # On renvoie un résultat formaté pour indiquer à Paul qu'il doit déclencher son template
+                last_error = (last_sandbox_result or {}).get("error") or "all_retries_failed"
                 backtest_result = {
-                    'status': 'FALLBACK',
-                    'error': 'all_retries_failed',
-                    'fallback_required': True,
-                    'execution_time_ms': 0
+                    "status": _BACKTEST_FALLBACK,
+                    "error": last_error,
+                    "fallback_required": True,
+                    "execution_time_ms": (last_sandbox_result or {}).get("execution_time_ms", 0) or 0,
                 }
             # ----------------------------------------------
         else:
             logger.warning("No claude_code_instructions returned by agents; skipping backtest.")
 
-    metrics = _build_metrics(backtest_result)
+    backtest_status = _classify_backtest_status(backtest_result) if executed_code else _BACKTEST_ERROR
+
+    # On enrichit backtest_result avec le status canonique pour que le frontend
+    # le voie tel quel dans `body.backtest.status` (contrat explicite Maxime).
+    if backtest_result is not None:
+        backtest_result = {**backtest_result, "status": backtest_status}
+
+    metrics = _build_metrics(backtest_result, backtest_status)
+
+    # chart_data (Maxime) : série temporelle pour le graphe de performance.
+    # Exposée UNIQUEMENT en SUCCESS — en FALLBACK/ERROR on n'a pas de pf réel,
+    # le front affiche un placeholder plutôt qu'une courbe trompeuse.
+    chart_data: list[dict] | None = None
+    if backtest_status == _BACKTEST_SUCCESS and isinstance(backtest_result, dict):
+        raw_chart = backtest_result.get("chart_data")
+        if isinstance(raw_chart, list):
+            chart_data = raw_chart
 
     strategy_payload: dict[str, Any] = {"metrics": metrics, "backtest_params": backtest_params}
     if pipeline_result:
@@ -294,8 +410,12 @@ print(f'WINRATE:{float(pf.trades.win_rate() * 100):.2f}')
     # B-LOGS-SANDBOX: persist one row per sandbox run (best-effort, won't raise).
     # Skipped on REJECTED runs (executed_code is None) — SandboxLog only tracks
     # actual sandbox executions, not pipeline-level rejections.
+    # On persiste le DERNIER retour sandbox réel (last_sandbox_result) plutôt
+    # que l'enveloppe FALLBACK : l'audit doit garder la vraie cause d'échec
+    # (status ERROR + error_type code_crash / security_violation / …), pas
+    # le badge UI. Sur succès, last_sandbox_result == backtest_result.
     if executed_code is not None:
-        _persist_sandbox_log(session, executed_code, backtest_result)
+        _persist_sandbox_log(session, executed_code, last_sandbox_result or backtest_result)
 
     return {
         "id": str(strategy.id),
@@ -307,6 +427,7 @@ print(f'WINRATE:{float(pf.trades.win_rate() * 100):.2f}')
         "metrics": metrics,
         "backtest": backtest_result,
         "backtest_params": backtest_params,
+        "chart_data": chart_data,
         "spread": spread,
         "error": error_message,
         "pipeline": pipeline_result,
