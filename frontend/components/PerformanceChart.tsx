@@ -1,9 +1,6 @@
 'use client';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
-// ============================================================
-// DONNÉES MOCK — à remplacer par BacktestResult.chart_data
-// ============================================================
 const MOCK_DATA = [
   { date: '2024-01', value: 100, drawdown: 0 },
   { date: '2024-02', value: 108, drawdown: -2 },
@@ -19,37 +16,65 @@ const MOCK_DATA = [
   { date: '2024-12', value: 135, drawdown: 0 },
 ];
 
-const tooltipStyle = { background: '#1a1c24', border: '1px solid #2a2a2a', borderRadius: 8, color: '#fff', fontSize: 12 };
+const tooltipStyle = {
+  background: 'rgba(10,8,20,0.95)',
+  border: '1px solid rgba(123,57,252,0.3)',
+  borderRadius: 12,
+  color: '#fff',
+  fontSize: 12,
+  fontFamily: 'Inter',
+};
 
 export default function PerformanceChart() {
   return (
-    <div style={{background: '#16181F', border: '1px solid #2a2a2a'}} className="rounded-xl p-6">
-      <h3 className="text-white font-semibold mb-1">Performance du portefeuille</h3>
-      <p className="text-xs mb-6" style={{color: '#666'}}>Equity curve — données mock</p>
+    <div className="rounded-2xl overflow-hidden"
+      style={{ background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(123,57,252,0.2)', backdropFilter: 'blur(24px)' }}>
 
-      <ResponsiveContainer width="100%" height={180}>
-        <LineChart data={MOCK_DATA}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e2028" />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#555' }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: '#555' }} axisLine={false} tickLine={false} />
-          <Tooltip contentStyle={tooltipStyle} />
-          <Line type="monotone" dataKey="value" stroke="#1D9E75" strokeWidth={2} dot={false} />
-        </LineChart>
-      </ResponsiveContainer>
+      <div className="px-6 py-4 flex items-center gap-3"
+        style={{ borderBottom: '1px solid rgba(123,57,252,0.12)', background: 'rgba(123,57,252,0.05)' }}>
+        <span className="text-sm font-semibold text-white" style={{ fontFamily: 'Manrope' }}>📊 Performance du portefeuille</span>
+        <span className="ml-auto text-xs px-2 py-1 rounded-full"
+          style={{ background: 'rgba(123,57,252,0.12)', color: '#a78bfa', border: '1px solid rgba(123,57,252,0.2)', fontFamily: 'Manrope' }}>
+          données mock
+        </span>
+      </div>
 
-      <h3 className="text-white font-semibold mt-6 mb-1">Drawdown</h3>
-      <p className="text-xs mb-4" style={{color: '#666'}}>Perte maximale depuis un pic</p>
+      <div className="p-6">
+        <p className="text-xs mb-4" style={{ color: '#555', fontFamily: 'Inter' }}>Equity curve — évolution du capital</p>
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart data={MOCK_DATA}>
+            <defs>
+              <linearGradient id="gradValue" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#7b39fc" stopOpacity={0.4} />
+                <stop offset="95%" stopColor="#7b39fc" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,57,252,0.08)" />
+            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#444', fontFamily: 'Inter' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: '#444', fontFamily: 'Inter' }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Area type="monotone" dataKey="value" stroke="#7b39fc" strokeWidth={2} fill="url(#gradValue)" dot={false} />
+          </AreaChart>
+        </ResponsiveContainer>
 
-      <ResponsiveContainer width="100%" height={120}>
-        <LineChart data={MOCK_DATA}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e2028" />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#555' }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: '#555' }} axisLine={false} tickLine={false} />
-          <Tooltip contentStyle={tooltipStyle} />
-          <ReferenceLine y={0} stroke="#333" />
-          <Line type="monotone" dataKey="drawdown" stroke="#E24B4A" strokeWidth={2} dot={false} />
-        </LineChart>
-      </ResponsiveContainer>
+        <p className="text-xs mt-6 mb-4" style={{ color: '#555', fontFamily: 'Inter' }}>Drawdown — perte maximale depuis un pic</p>
+        <ResponsiveContainer width="100%" height={130}>
+          <AreaChart data={MOCK_DATA}>
+            <defs>
+              <linearGradient id="gradDD" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#F87171" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#F87171" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(248,113,113,0.06)" />
+            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#444', fontFamily: 'Inter' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: '#444', fontFamily: 'Inter' }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <ReferenceLine y={0} stroke="rgba(255,255,255,0.08)" />
+            <Area type="monotone" dataKey="drawdown" stroke="#F87171" strokeWidth={2} fill="url(#gradDD)" dot={false} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
