@@ -1,4 +1,5 @@
 import ast
+import json
 import time
 from dotenv import load_dotenv
 from e2b_code_interpreter import Sandbox
@@ -98,6 +99,7 @@ def run_backtest(code: str, timeout: int = 60, spread: float = 0.0001) -> dict:
             stdout_text = "".join(execution.logs.stdout) if hasattr(execution, 'logs') and execution.logs and execution.logs.stdout else ""
             
             sharpe = drawdown = total_return = num_trades = win_rate = 0.0
+            chart_data: list[dict] | None = None
             if stdout_text:
                 for line in stdout_text.split('\n'):
                     line = line.strip()
@@ -116,6 +118,11 @@ def run_backtest(code: str, timeout: int = 60, spread: float = 0.0001) -> dict:
                     elif line.startswith('WINRATE:'):
                         try: win_rate = float(line.split(':')[1])
                         except ValueError: pass
+                    elif line.startswith('CHART_DATA:'):
+                        try:
+                            chart_data = json.loads(line[len('CHART_DATA:'):])
+                        except (ValueError, json.JSONDecodeError):
+                            chart_data = None
 
             return {
                 'status': 'SUCCESS',
@@ -124,6 +131,7 @@ def run_backtest(code: str, timeout: int = 60, spread: float = 0.0001) -> dict:
                 'return': round(total_return, 4),
                 'num_trades': int(num_trades),
                 'win_rate_pct': round(win_rate, 2),
+                'chart_data': chart_data,
                 'execution_time_ms': execution_time_ms,
                 'stdout': stdout_text,
                 'stderr': "".join(execution.logs.stderr) if hasattr(execution, 'logs') and execution.logs and execution.logs.stderr else ""

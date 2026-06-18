@@ -298,6 +298,31 @@ print(f'DRAWDOWN:{float(pf.max_drawdown()):.4f}')
 print(f'RETURN:{float(pf.total_return()):.4f}')
 print(f'TRADES:{int(pf.trades.count() if hasattr(pf, "trades") else 0)}')
 print(f'WINRATE:{float(pf.trades.win_rate() * 100):.2f}')
+
+# --- Injection chart_data (série temporelle pour graphe front, Maxime) ---
+# Sous-échantillonnage stride uniforme : borne dure ~200 points, robuste à
+# n'importe quelle fréquence (1h crypto -> 1d equity), pas de biais d'agrégation
+# (le pic de drawdown est préservé, ce qu'un resample.mean() lisserait).
+import json as _qg_json
+try:
+    _qg_val = pf.value()
+    _qg_dd = pf.drawdown()
+    _qg_n = len(_qg_val)
+    _QG_TARGET = 200
+    _qg_step = max(1, _qg_n // _QG_TARGET)
+    _qg_val_ds = _qg_val.iloc[::_qg_step].fillna(0.0)
+    _qg_dd_ds = _qg_dd.iloc[::_qg_step].fillna(0.0)
+    _qg_chart = [
+        {
+            'date': _qg_idx.strftime('%Y-%m-%d'),
+            'value': float(_qg_v),
+            'drawdown': float(_qg_d) * 100.0,
+        }
+        for _qg_idx, _qg_v, _qg_d in zip(_qg_val_ds.index, _qg_val_ds.values, _qg_dd_ds.values)
+    ]
+    print('CHART_DATA:' + _qg_json.dumps(_qg_chart))
+except Exception as _qg_exc:
+    print(f'CHART_DATA_ERROR:{type(_qg_exc).__name__}: {_qg_exc}')
 """
             executed_code = code
             # --- MATHIS S3 : BOUCLE RETRY ET FALLBACK ---
@@ -360,6 +385,15 @@ print(f'WINRATE:{float(pf.trades.win_rate() * 100):.2f}')
 
     metrics = _build_metrics(backtest_result, backtest_status)
 
+    # chart_data (Maxime) : série temporelle pour le graphe de performance.
+    # Exposée UNIQUEMENT en SUCCESS — en FALLBACK/ERROR on n'a pas de pf réel,
+    # le front affiche un placeholder plutôt qu'une courbe trompeuse.
+    chart_data: list[dict] | None = None
+    if backtest_status == _BACKTEST_SUCCESS and isinstance(backtest_result, dict):
+        raw_chart = backtest_result.get("chart_data")
+        if isinstance(raw_chart, list):
+            chart_data = raw_chart
+
     strategy_payload: dict[str, Any] = {"metrics": metrics, "backtest_params": backtest_params}
     if pipeline_result:
         strategy_payload = {**pipeline_result, **strategy_payload}
@@ -393,6 +427,7 @@ print(f'WINRATE:{float(pf.trades.win_rate() * 100):.2f}')
         "metrics": metrics,
         "backtest": backtest_result,
         "backtest_params": backtest_params,
+        "chart_data": chart_data,
         "spread": spread,
         "error": error_message,
         "pipeline": pipeline_result,
