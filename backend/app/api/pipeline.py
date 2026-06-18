@@ -252,19 +252,20 @@ def _build_metrics(
 
 
 @router.post("/run")
-@limiter.limit("5/hour")
 def run_pipeline(
     request: Request,
     payload: dict[str, Any] = Body(...),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    # Cache HIT path : volontairement HORS du @limiter.limit. slowapi pose son
+    # hook avant le body de la fonction décorée, donc inclure le check Redis
+    # dans le path limité ferait décrémenter le quota même sur HIT (= cache
+    # inutile face au rate limit). On split : ce dispatcher lit le cache sans
+    # rate limit, et délègue à _run_pipeline_uncached (limité) sur MISS.
     intent = payload.get("intent")
     if not intent or not isinstance(intent, str):
         raise HTTPException(status_code=422, detail="Field 'intent' is required (string).")
 
-    # Demo-day cache: identical intents (e.g. "RSI Bitcoin") replay an instant,
-    # free response instead of re-running the LLM agents + ~40s sandbox. Reuses
-    # data_service._get_redis() — same client, graceful no-op when Redis is down.
     cache_client = _get_redis()
     if cache_client is not None:
         try:
@@ -274,6 +275,19 @@ def run_pipeline(
         except (redis.RedisError, ValueError) as exc:
             logger.warning("Pipeline cache read failed: %s", exc)
 
+    return _run_pipeline_uncached(request, session, intent, cache_client)
+
+
+@limiter.limit("5/hour")
+def _run_pipeline_uncached(
+    request: Request,
+    session: Session,
+    intent: str,
+    cache_client: "redis.Redis | None",
+) -> dict[str, Any]:
+    # Path "vrai run" : LLM agents + sandbox + cache write. C'est ce path qui
+    # consomme du quota — protège réellement le coût API/sandbox. `request` reste
+    # en premier argument car slowapi.Limiter le réclame pour key_func=remote_address.
     try:
         agents_response = _run_agents_pipeline(intent)
     except HTTPException:
