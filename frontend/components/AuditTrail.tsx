@@ -35,9 +35,20 @@ export default function AuditTrail({ result }: AuditTrailProps) {
               </div>
               <div className="flex-1 rounded-lg p-4 mb-2" style={{background: '#1a1c24', border: '1px solid #2a2a2a'}}>
                 <p className="text-sm font-medium text-white mb-1">{agent}</p>
-                <p className="text-xs mb-2" style={{color: '#666'}}>
-                  {typeof decision === 'object' ? JSON.stringify(decision).slice(0, 120) : String(decision)}
-                </p>
+                {typeof decision === 'object' && decision !== null ? (
+                  <details className="audit-details mb-2">
+                    <summary className="text-xs" style={{color: '#666', cursor: 'pointer'}}>
+                      {JSON.stringify(decision).slice(0, 120)}
+                      <span className="audit-toggle" style={{color: '#a78bfa', marginLeft: 6, fontWeight: 600}} />
+                    </summary>
+                    <pre className="text-xs mt-2 p-3 rounded-lg"
+                      style={{color: '#999', background: 'rgba(123,57,252,0.06)', border: '1px solid rgba(123,57,252,0.15)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace'}}>
+                      {JSON.stringify(decision, null, 2)}
+                    </pre>
+                  </details>
+                ) : (
+                  <p className="text-xs mb-2" style={{color: '#666'}}>{String(decision)}</p>
+                )}
                 <span className="text-xs font-semibold" style={{color: '#1D9E75'}}>→ Complété</span>
               </div>
             </div>
@@ -62,6 +73,21 @@ export default function AuditTrail({ result }: AuditTrailProps) {
           ))
         )}
       </div>
+
+      <style jsx>{`
+        .audit-details > summary {
+          list-style: none;
+        }
+        .audit-details > summary::-webkit-details-marker {
+          display: none;
+        }
+        .audit-toggle::after {
+          content: '▸ voir plus';
+        }
+        .audit-details[open] > summary .audit-toggle::after {
+          content: '▾ replier';
+        }
+      `}</style>
     </div>
   );
 }

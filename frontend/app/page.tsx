@@ -34,6 +34,7 @@ export interface BacktestResult {
     status: string;
     pipeline_start?: string;
   };
+  chart_data?: { date: string; value: number; drawdown: number }[] | null;
 }
 
 export default function Home() {
@@ -73,7 +74,7 @@ export default function Home() {
             <span className="text-white font-bold text-sm" style={{ fontFamily: 'Manrope' }}>Q</span>
           </div>
           <span className="font-bold text-white text-lg" style={{ fontFamily: 'Manrope' }}>
-            Quant<span style={{ color: '#7b39fc' }}>Genesis</span>
+            Quant<span style={{ color: '#7b39fc' }}>Clarity</span>
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -98,7 +99,7 @@ export default function Home() {
           <span className="text-xs px-2 py-0.5 rounded font-semibold"
             style={{ background: '#7b39fc', color: '#fff', fontFamily: 'Manrope' }}>New</span>
           <span className="text-xs" style={{ color: 'rgba(255,255,255,0.8)', fontFamily: 'Manrope' }}>
-            5 agents IA · Backtest White-Box · AI Act compliant
+            6 agents IA · Backtest White-Box · AI Act compliant
           </span>
         </div>
 
@@ -112,7 +113,7 @@ export default function Home() {
 
         {/* Subtext */}
         <p className="text-lg mb-10 max-w-xl mx-auto" style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter', lineHeight: 1.7 }}>
-          Décris ta stratégie en langage naturel. 5 agents IA construisent, backtestent et expliquent chaque décision — en toute transparence.
+          Décris ta stratégie en langage naturel. 6 agents IA construisent, backtestent et expliquent chaque décision — en toute transparence.
         </p>
 
         {/* CTA buttons */}
@@ -160,7 +161,7 @@ export default function Home() {
       <div id="pipeline" className="relative z-10 max-w-4xl mx-auto px-6 pb-20 flex flex-col gap-5">
         <Chat onResult={setResult} />
         <StrategyHistory onLoad={setResult} />
-        {result && <PerformanceChart />}
+        {result && <PerformanceChart result={result} />}
         {result && <WhiteBox result={result} />}
         {result && <AuditTrail result={result} />}
       </div>
@@ -168,7 +169,7 @@ export default function Home() {
       {/* FOOTER */}
       <footer className="relative z-10 text-center py-10" style={{ borderTop: '1px solid rgba(123,57,252,0.1)' }}>
         <p className="text-xs" style={{ color: '#444', fontFamily: 'Inter' }}>
-          QuantGenesis · ESIEE Paris 2025–2026 · Vos données ne quittent pas votre session · Propulsé par 6 agents IA
+          QuantClarity · ESIEE Paris 2025–2026 · Vos données ne quittent pas votre session · Propulsé par 6 agents IA
         </p>
       </footer>
     </main>

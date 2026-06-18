@@ -78,9 +78,20 @@ export default function WhiteBox({ result }: WhiteBoxProps) {
                   style={{ background: 'rgba(123,57,252,0.05)', border: '1px solid rgba(123,57,252,0.12)' }}>
                   <div className="flex-1 min-w-0 pr-3">
                     <p className="text-sm font-semibold text-white mb-0.5" style={{ fontFamily: 'Manrope' }}>{key}</p>
-                    <p className="text-xs break-words" style={{ color: '#555', fontFamily: 'Inter' }}>
-                      {typeof value === 'object' ? JSON.stringify(value).slice(0, 100) + '...' : String(value)}
-                    </p>
+                    {typeof value === 'object' && value !== null ? (
+                      <details className="wb-details">
+                        <summary className="text-xs break-words" style={{ color: '#555', cursor: 'pointer', fontFamily: 'Inter' }}>
+                          {JSON.stringify(value).slice(0, 100)}
+                          <span className="wb-toggle" style={{ color: '#a78bfa', marginLeft: 6, fontWeight: 600 }} />
+                        </summary>
+                        <pre className="text-xs mt-2 p-3 rounded-lg"
+                          style={{ color: '#999', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(123,57,252,0.15)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace' }}>
+                          {JSON.stringify(value, null, 2)}
+                        </pre>
+                      </details>
+                    ) : (
+                      <p className="text-xs break-words" style={{ color: '#555', fontFamily: 'Inter' }}>{String(value)}</p>
+                    )}
                   </div>
                   <span className="text-xs font-bold px-2 py-1 rounded-full ml-2 flex-shrink-0"
                     style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.25)', fontFamily: 'Manrope' }}>
@@ -96,6 +107,21 @@ export default function WhiteBox({ result }: WhiteBoxProps) {
           </div>
         )}
       </div>
+
+      <style jsx>{`
+        .wb-details > summary {
+          list-style: none;
+        }
+        .wb-details > summary::-webkit-details-marker {
+          display: none;
+        }
+        .wb-toggle::after {
+          content: '▸ voir plus';
+        }
+        .wb-details[open] > summary .wb-toggle::after {
+          content: '▾ replier';
+        }
+      `}</style>
     </div>
   );
 }
