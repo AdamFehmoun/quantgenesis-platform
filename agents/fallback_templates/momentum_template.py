@@ -26,8 +26,30 @@ def build_momentum_template(
     fees: float = 0.001,
     slippage: float = 0.0015,
     init_cash: float = 100_000,
+    sizing: float = None,
+    sl_stop: float = None,
+    sl_trail: float = None,
 ) -> str:
-    """Script Momentum ROC paramétrable."""
+    """Script Momentum ROC paramétrable.
+
+    Params sur-mesure (étape 2, defaults sûrs = comportement historique) :
+    - sizing  : fraction du capital par trade (size_type='percent'). None -> all-in vbt.
+    - sl_stop : stop-loss fixe (fraction). None -> pas de stop fixe.
+    - sl_trail: stop suiveur (fraction). None -> pas de trailing stop.
+
+    Avec sizing/sl_stop/sl_trail=None, le script généré est STRICTEMENT identique
+    à la version d'origine (zéro régression). Pas de filtre de régime : ROC > seuil
+    EST le signal de tendance.
+    """
+    # Lignes optionnelles de from_signals (sizing + stops) — vide par défaut.
+    extra_lines = ""
+    if sizing is not None:
+        extra_lines += f"    size={sizing},\n    size_type='percent',\n"
+    if sl_stop is not None:
+        extra_lines += f"    sl_stop={sl_stop},\n"
+    if sl_trail is not None:
+        extra_lines += f"    sl_trail={sl_trail},\n"
+
     return f'''import pandas as pd
 import vectorbt as vbt
 import yfinance as yf
@@ -58,7 +80,7 @@ pf = vbt.Portfolio.from_signals(
     fees={fees},
     slippage={slippage},
     init_cash={init_cash},
-    freq="1D",
+{extra_lines}    freq="1D",
 )
 
 # 5. Metriques standard
@@ -83,6 +105,10 @@ def run_momentum_template(asset: str = "BTC-USD", period: str = "2y", **kwargs) 
     fees = kwargs.get("fees", 0.001)
     slippage = kwargs.get("slippage", 0.0015)
     init_cash = kwargs.get("init_cash", 100_000)
+    # Params sur-mesure (étape 2) — defaults sûrs = comportement historique.
+    sizing = kwargs.get("sizing")
+    sl_stop = kwargs.get("sl_stop")
+    sl_trail = kwargs.get("sl_trail")
 
     df = yf.download(asset, period=period, auto_adjust=True, progress=False)
     if df.empty:
@@ -94,8 +120,8 @@ def run_momentum_template(asset: str = "BTC-USD", period: str = "2y", **kwargs) 
     entries = (roc > roc_entry).shift(1).fillna(False).astype(bool)
     exits = (roc < roc_exit).shift(1).fillna(False).astype(bool)
 
-    pf = vbt.Portfolio.from_signals(
-        df["Open"],
+    # Lignes optionnelles de from_signals (sizing + stops) — identiques au builder.
+    fs_kwargs = dict(
         entries=entries,
         exits=exits,
         fees=fees,
@@ -103,6 +129,15 @@ def run_momentum_template(asset: str = "BTC-USD", period: str = "2y", **kwargs) 
         init_cash=init_cash,
         freq="1D",
     )
+    if sizing is not None:
+        fs_kwargs["size"] = sizing
+        fs_kwargs["size_type"] = "percent"
+    if sl_stop is not None:
+        fs_kwargs["sl_stop"] = sl_stop
+    if sl_trail is not None:
+        fs_kwargs["sl_trail"] = sl_trail
+
+    pf = vbt.Portfolio.from_signals(df["Open"], **fs_kwargs)
 
     return {
         "template": "momentum_roc",
@@ -115,6 +150,9 @@ def run_momentum_template(asset: str = "BTC-USD", period: str = "2y", **kwargs) 
             "fees": fees,
             "slippage": slippage,
             "init_cash": init_cash,
+            "sizing": sizing,
+            "sl_stop": sl_stop,
+            "sl_trail": sl_trail,
         },
         "metrics": {
             "sharpe_ratio": round(float(pf.sharpe_ratio().item() if hasattr(pf.sharpe_ratio(), "item") else pf.sharpe_ratio()), 4),

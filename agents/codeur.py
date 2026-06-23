@@ -39,10 +39,24 @@ _VALID_TEMPLATES = {"rsi", "ma", "bollinger", "momentum"}
 # Le defaut n'est PAS injecte ici : si la valeur est absente/invalide, la clef est
 # OMISE et le defaut du builder s'applique -> code toujours valide.
 _PARAM_BOUNDS_INT = {
+    # RSI (étape 1 — figé)
     "rsi_window": (5, 50, 14),
     "rsi_oversold": (10, 40, 30),
     "rsi_overbought": (60, 90, 70),
-    "ma_regime_window": (20, 300, 200),
+    "ma_regime_window": (20, 300, 200),  # partagé RSI + Bollinger
+    # MA crossover (étape 2)
+    "ma_fast": (5, 50, 50),
+    "ma_slow": (20, 300, 200),
+    # Bollinger (étape 2)
+    "bb_window": (10, 50, 20),
+    # Momentum (étape 2)
+    "roc_window": (5, 100, 14),
+}
+# Params flottants spécifiques à un template (clampés comme les ints, mais float).
+_PARAM_BOUNDS_FLOAT = {
+    "bb_alpha": (1.5, 3.0, 2.0),
+    "roc_entry_threshold": (0.0, 0.20, 0.02),
+    "roc_exit_threshold": (-0.20, 0.05, 0.0),
 }
 _SIZING_BOUNDS = (0.05, 0.30, 0.15)
 _INIT_CASH_BOUNDS = (10_000, 10_000_000, 100_000)
@@ -74,11 +88,17 @@ def validate_strategy_params(raw: Any) -> dict:
     if not isinstance(raw, dict):
         return out
 
-    # Fenetres et seuils (int clampes)
+    # Fenetres et seuils (int clampes) — tous templates confondus
     for key, (lo, hi, _default) in _PARAM_BOUNDS_INT.items():
         val = raw.get(key)
         if _is_number(val):
             out[key] = int(_clamp(int(val), lo, hi))
+
+    # Params flottants specifiques (bb_alpha, seuils ROC) — clampes en float
+    for key, (lo, hi, _default) in _PARAM_BOUNDS_FLOAT.items():
+        val = raw.get(key)
+        if _is_number(val):
+            out[key] = float(_clamp(float(val), lo, hi))
 
     # sizing (fraction du capital)
     sizing = raw.get("sizing")
@@ -92,12 +112,26 @@ def validate_strategy_params(raw: Any) -> dict:
         lo, hi, _ = _INIT_CASH_BOUNDS
         out["init_cash"] = float(_clamp(float(init_cash), lo, hi))
 
-    # INVARIANT seuils : oversold + 10 <= overbought, sinon reset les DEUX aux defauts
+    # INVARIANT RSI : oversold + 10 <= overbought, sinon reset les DEUX aux defauts
     os_v = out.get("rsi_oversold")
     ob_v = out.get("rsi_overbought")
     if os_v is not None and ob_v is not None and os_v + 10 > ob_v:
         out["rsi_oversold"] = _PARAM_BOUNDS_INT["rsi_oversold"][2]      # 30
         out["rsi_overbought"] = _PARAM_BOUNDS_INT["rsi_overbought"][2]  # 70
+
+    # INVARIANT MA : fast < slow, sinon reset les DEUX aux defauts (50 / 200)
+    f_v = out.get("ma_fast")
+    s_v = out.get("ma_slow")
+    if f_v is not None and s_v is not None and f_v >= s_v:
+        out["ma_fast"] = _PARAM_BOUNDS_INT["ma_fast"][2]   # 50
+        out["ma_slow"] = _PARAM_BOUNDS_INT["ma_slow"][2]   # 200
+
+    # INVARIANT Momentum : seuil d'entree > seuil de sortie, sinon reset aux defauts
+    en_v = out.get("roc_entry_threshold")
+    ex_v = out.get("roc_exit_threshold")
+    if en_v is not None and ex_v is not None and en_v <= ex_v:
+        out["roc_entry_threshold"] = _PARAM_BOUNDS_FLOAT["roc_entry_threshold"][2]  # 0.02
+        out["roc_exit_threshold"] = _PARAM_BOUNDS_FLOAT["roc_exit_threshold"][2]    # 0.0
 
     # regime_filter (bool strict)
     rf = raw.get("regime_filter")
@@ -133,15 +167,19 @@ def _select_template_from_spec(spec: dict, user_intent: str) -> str:
     return select_template(user_intent or "")
 
 
-# Params issus de strategy_params propages UNIQUEMENT au template RSI (etape 1).
-# Les autres templates (MA/Bollinger/Momentum) ne sont pas encore parametrables :
-# on ne leur transmet que les clefs communes pour eviter tout TypeError (kwarg
-# inattendu) et garantir zero regression.
-_RSI_ONLY_KEYS = {
-    "rsi_window", "rsi_oversold", "rsi_overbought",
-    "ma_regime_window", "regime_filter", "sizing", "sl_stop", "sl_trail",
+# Routage des strategy_params vers le bon builder. Chaque clef validee n'est
+# propagee qu'aux templates qui l'acceptent (eviter tout TypeError : kwarg
+# inattendu) -> zero regression pour les autres.
+# Clefs COMMUNES : acceptees par TOUS les builders (mêmes bornes/règles que RSI).
+_COMMON_KEYS = {"init_cash", "sizing", "sl_stop", "sl_trail"}
+# Clefs SPECIFIQUES par template (en plus des communes).
+_TEMPLATE_KEYS = {
+    "rsi": {"rsi_window", "rsi_oversold", "rsi_overbought",
+            "ma_regime_window", "regime_filter"},
+    "ma": {"ma_fast", "ma_slow"},
+    "bollinger": {"bb_window", "bb_alpha", "ma_regime_window", "regime_filter"},
+    "momentum": {"roc_window", "roc_entry_threshold", "roc_exit_threshold"},
 }
-_COMMON_KEYS = {"init_cash"}
 
 
 def _extract_params_from_spec(spec: dict, template_name: str) -> dict:
@@ -149,9 +187,9 @@ def _extract_params_from_spec(spec: dict, template_name: str) -> dict:
     Extrait les params exploitables de la spec.
 
     Source principale : le bloc structure spec["strategy_params"] (Architecte v11),
-    valide/clampe par validate_strategy_params (garde-fous). Etape 1 : seuls les
-    params RSI-specifiques sont propages au template "rsi" ; les autres templates
-    ne recoivent que les clefs communes (init_cash) -> zero regression.
+    valide/clampe par validate_strategy_params (garde-fous). Chaque clef n'est
+    propagee qu'au(x) template(s) qui l'acceptent (clefs communes + clefs
+    specifiques du template choisi) -> zero regression pour les autres.
 
     Compat ascendante : init_cash peut aussi venir de vectorbt_specifics.init_cash.
     """
@@ -168,12 +206,11 @@ def _extract_params_from_spec(spec: dict, template_name: str) -> dict:
 
     # Source principale : bloc structure strategy_params (valide + clampe)
     sp = validate_strategy_params(spec.get("strategy_params", {}))
+    allowed = _TEMPLATE_KEYS.get(template_name, set())
     for key, val in sp.items():
-        if key in _COMMON_KEYS:
+        if key in _COMMON_KEYS or key in allowed:
             params[key] = val
-        elif key in _RSI_ONLY_KEYS and template_name == "rsi":
-            params[key] = val
-        # sinon : clef RSI-specifique pour un template non-RSI -> ignoree (etape 1)
+        # sinon : clef destinee a un autre template -> ignoree (zero regression)
 
     return params
 

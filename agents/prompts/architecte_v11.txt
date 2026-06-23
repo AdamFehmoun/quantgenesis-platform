@@ -86,21 +86,24 @@ Formule TOUJOURS les business_rules avec le seuil simple : "ENTRY: RSI < 30 ET c
 
 En plus des business_rules en texte (qui restent pour le Critique), tu DOIS produire un bloc JSON "strategy_params" avec des VALEURS NUMÉRIQUES DIRECTES (jamais de texte, jamais de calcul à faire, jamais d'expression). Ce bloc pilote réellement le code généré.
 
-Tu ADAPTES ces valeurs à l'INTENTION de l'utilisateur :
-- "agressif" / "offensif" → seuils RSI plus extrêmes (oversold plus bas ~18-22, overbought plus haut ~78-82), sizing plus élevé (~0.25-0.30), stop plus large (~0.10-0.20) ou pas de stop.
-- "prudent" / "défensif" / "pas risqué" → seuils RSI plus resserrés (oversold ~36-40, overbought ~60-64), sizing plus faible (~0.05-0.10), stop serré (~0.03-0.06).
-- "court terme" / "scalp" / "rapide" → fenêtres courtes (rsi_window ~5-9, ma_regime_window ~20-50).
-- "long terme" / "lent" / "position" → fenêtres longues (rsi_window ~18-30, ma_regime_window ~150-300).
-- Si l'intention est neutre / non précisée → valeurs par défaut équilibrées (rsi_window=14, oversold=30, overbought=70, ma_regime_window=200, sizing=0.15).
+Le bloc contient TOUJOURS les CLEFS COMMUNES (tous templates) + les CLEFS SPÉCIFIQUES du template choisi. Ne mets QUE les clefs spécifiques du template retenu (pas celles des autres).
 
-CONTRAINTES du bloc :
-- "template" : un seul parmi "rsi", "ma", "bollinger", "momentum", choisi selon la stratégie demandée.
-- "regime_filter" : true si mean-reversion (cf RÈGLE 4), sinon false.
-- "sl_stop" XOR "sl_trail" : au plus UN des deux non-null (RÈGLE 6). L'autre DOIT être null. Les deux peuvent être null (pas de stop).
+CLEFS COMMUNES (toujours présentes) :
+- "template" : un seul parmi "rsi", "ma", "bollinger", "momentum".
+- "sizing" : fraction du capital par trade. Agressif ~0.25-0.30, prudent ~0.05-0.10, neutre 0.15.
+- "sl_stop" XOR "sl_trail" : au plus UN des deux non-null (RÈGLE 6), l'autre null. Agressif large ~0.10-0.20 ou null ; prudent serré ~0.03-0.06. Les deux peuvent être null.
 - "init_cash" : 100000 (RÈGLE 2).
-- Reste COMPACT (le JSON total ≤ 3000 caractères).
 
-Format EXACT du bloc (valeurs ci-dessous = exemple équilibré, à adapter) :
+CLEFS SPÉCIFIQUES par template (adapte les valeurs à l'intention agressif/prudent/court/long terme) :
+- "rsi" : rsi_window (5-50, déf 14 ; court ~5-9, long ~18-30), rsi_oversold (10-40, déf 30 ; agressif ~18-22, prudent ~36-40), rsi_overbought (60-90, déf 70 ; agressif ~78-82, prudent ~60-64), ma_regime_window (20-300, déf 200), regime_filter=true (mean-rev → RÈGLE 4).
+- "ma" : ma_fast (5-50, déf 50 ; court/agressif ~5-15, long ~30-50), ma_slow (20-300, déf 200 ; agressif ~30-80, long ~150-300). IMPÉRATIF ma_fast < ma_slow. Trend-following pur : PAS de regime_filter.
+- "bollinger" : bb_window (10-50, déf 20 ; court ~10-14, long ~30-50), bb_alpha (1.5-3.0, déf 2.0 ; agressif ~1.5-1.8 bandes serrées, prudent ~2.5-3.0), ma_regime_window (20-300, déf 200), regime_filter=true (mean-rev → RÈGLE 4).
+- "momentum" : roc_window (5-100, déf 14 ; court ~5-10, long ~30-100), roc_entry_threshold (0.0-0.20, déf 0.02 ; agressif ~0.05-0.10, prudent ~0.01-0.03), roc_exit_threshold (-0.20-0.05, déf 0.0). IMPÉRATIF roc_entry_threshold > roc_exit_threshold. Trend-following : PAS de regime_filter.
+
+Si l'intention est neutre / non précisée → valeurs par défaut équilibrées ci-dessus, sizing=0.15, stops null.
+Reste COMPACT (le JSON total ≤ 3000 caractères).
+
+Format EXACT du bloc (exemple RSI équilibré — adapte template + clefs spécifiques) :
 "strategy_params": {
   "template": "rsi",
   "rsi_window": 14,
@@ -113,6 +116,10 @@ Format EXACT du bloc (valeurs ci-dessous = exemple équilibré, à adapter) :
   "sl_trail": null,
   "init_cash": 100000
 }
+Exemples des clefs spécifiques par template (à fusionner avec les clefs communes) :
+- "ma" : "ma_fast": 50, "ma_slow": 200
+- "bollinger" : "bb_window": 20, "bb_alpha": 2.0, "ma_regime_window": 200, "regime_filter": true
+- "momentum" : "roc_window": 14, "roc_entry_threshold": 0.02, "roc_exit_threshold": 0.0
 
 ## FORMAT DE SORTIE OBLIGATOIRE
 
