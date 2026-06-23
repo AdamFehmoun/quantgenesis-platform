@@ -5,6 +5,7 @@ import PerformanceChart from "../components/PerformanceChart";
 import WhiteBox from "../components/WhiteBox";
 import AuditTrail from "../components/AuditTrail";
 import StrategyHistory from "../components/StrategyHistory";
+import PrivacyNotice from "../components/PrivacyNotice";
 
 export interface BacktestResult {
   status: string;
@@ -160,6 +161,7 @@ export default function Home() {
       {/* MAIN CONTENT */}
       <div id="pipeline" className="relative z-10 max-w-5xl mx-auto px-6 pb-24 flex flex-col gap-10">
         <Chat onResult={setResult} />
+        <PrivacyNotice />
         <StrategyHistory onLoad={setResult} />
         {result && (
           <div className="flex flex-col gap-10 animate-fade-slide">
