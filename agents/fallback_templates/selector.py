@@ -136,12 +136,11 @@ def run_template(
     # Import paresseux : codeur importe déjà selector (évite l'import circulaire).
     raw_sp = kwargs.pop("strategy_params", None)
     if raw_sp is not None:
-        from agents.codeur import validate_strategy_params, _RSI_ONLY_KEYS, _COMMON_KEYS
+        from agents.codeur import validate_strategy_params, _TEMPLATE_KEYS, _COMMON_KEYS
         validated = validate_strategy_params(raw_sp)
+        allowed = _TEMPLATE_KEYS.get(template_name, set())
         for key, val in validated.items():
-            if key in _COMMON_KEYS:
-                kwargs.setdefault(key, val)
-            elif key in _RSI_ONLY_KEYS and template_name == "rsi":
+            if key in _COMMON_KEYS or key in allowed:
                 kwargs.setdefault(key, val)
 
     # Dispatch
