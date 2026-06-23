@@ -30,7 +30,7 @@ class ArchitecteAgent(BaseAgent):
     def __init__(self):
         super().__init__(name="Architecte", model="claude-opus-4-6")
         self.max_tokens = 5000
-        path = os.path.join(os.path.dirname(__file__), "..", "prompts", "architecte_v10.txt")
+        path = os.path.join(os.path.dirname(__file__), "..", "prompts", "architecte_v11.txt")
         with open(path, "r", encoding="utf-8") as f:
             self._system_prompt = f.read()
 
