@@ -55,6 +55,28 @@ body {
 
 .animate-fade-slide { animation: fadeSlideIn 0.5s ease forwards; }
 
+/* Entrée en cascade des cartes de résultats (transition douce depuis l'écran
+   d'attente). `both` = l'état initial (opacity 0) s'applique pendant le delay,
+   donc pas de flash avant le démarrage de l'animation. */
+@keyframes fadeRise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-rise { animation: fadeRise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Onboarding — cartes d'accueil : lévitation + bordure accent au survol */
+.onb-card:hover {
+  transform: translateY(-6px);
+  border-color: color-mix(in srgb, var(--onb-accent, #7b39fc) 60%, transparent) !important;
+  box-shadow: 0 20px 50px color-mix(in srgb, var(--onb-accent, #7b39fc) 25%, transparent);
+}
+/* Onboarding — pastilles d'option du chat guidé */
+.onb-opt:hover {
+  transform: translateY(-2px);
+  border-color: rgba(123, 57, 252, 0.7) !important;
+  background: rgba(123, 57, 252, 0.12) !important;
+}
+
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: #060810; }
 ::-webkit-scrollbar-thumb { background: rgba(123,57,252,0.4); border-radius: 4px; }

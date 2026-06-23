@@ -1,6 +1,7 @@
 'use client';
-import { useState } from 'react';
-import Chat from "../components/Chat";
+import { useState, useRef } from 'react';
+import Chat, { type ChatHandle } from "../components/Chat";
+import Onboarding from "../components/Onboarding";
 import PerformanceChart from "../components/PerformanceChart";
 import WhiteBox from "../components/WhiteBox";
 import AuditTrail from "../components/AuditTrail";
@@ -40,9 +41,33 @@ export interface BacktestResult {
 
 export default function Home() {
   const [result, setResult] = useState<BacktestResult | null>(null);
+  // L'onboarding précède le flux existant ; une fois lancé, il se retire et
+  // l'animation des 6 agents + résultats prennent le relais (inchangés).
+  const [started, setStarted] = useState(false);
+  const chatRef = useRef<ChatHandle | null>(null);
+
+  const handleLaunch = (intent: string) => {
+    setStarted(true);
+    // Chat est déjà monté : on déclenche le pipeline existant avec l'intent construit.
+    chatRef.current?.start(intent);
+    // Amène l'utilisateur sur le pipeline (au-dessus : navbar + hero existants).
+    setTimeout(() => {
+      document.getElementById('pipeline')?.scrollIntoView({ behavior: 'smooth' });
+    }, 80);
+  };
 
   return (
     <main className="min-h-screen relative overflow-x-hidden" style={{ background: '#060810' }}>
+
+      {/* ONBOARDING — écran initial qui PRÉCÈDE le flux existant. Au lancement,
+          il appelle chatRef.start(intent) puis se retire (started=true). */}
+      {!started && <Onboarding onLaunch={handleLaunch} />}
+
+      {/* FLUX EXISTANT — masqué tant que l'onboarding n'a pas lancé (started=false).
+          display:none garde Chat MONTÉ (ref impérative + ambiance préservés) ; aucun
+          résidu de l'ancien accueil ne reste visible derrière l'overlay. Une fois
+          lancé, display:contents restitue exactement le layout d'origine. */}
+      <div style={{ display: started ? 'contents' : 'none' }}>
 
       {/* BACKGROUND — gradient animé */}
       <div className="fixed inset-0 z-0 pointer-events-none">
@@ -160,14 +185,14 @@ export default function Home() {
 
       {/* MAIN CONTENT */}
       <div id="pipeline" className="relative z-10 max-w-5xl mx-auto px-6 pb-24 flex flex-col gap-10">
-        <Chat onResult={setResult} />
+        <Chat ref={chatRef} onResult={setResult} />
         <PrivacyNotice />
         <StrategyHistory onLoad={setResult} />
         {result && (
-          <div className="flex flex-col gap-10 animate-fade-slide">
-            <PerformanceChart result={result} />
-            <WhiteBox result={result} />
-            <AuditTrail result={result} />
+          <div className="flex flex-col gap-10">
+            <div className="animate-fade-rise" style={{ animationDelay: '0.05s' }}><PerformanceChart result={result} /></div>
+            <div className="animate-fade-rise" style={{ animationDelay: '0.15s' }}><WhiteBox result={result} /></div>
+            <div className="animate-fade-rise" style={{ animationDelay: '0.25s' }}><AuditTrail result={result} /></div>
           </div>
         )}
       </div>
@@ -178,6 +203,8 @@ export default function Home() {
           QuantClarity · ESIEE Paris 2025–2026 · Vos données ne quittent pas votre session · Propulsé par 6 agents IA
         </p>
       </footer>
+
+      </div>{/* /FLUX EXISTANT */}
     </main>
   );
 }
