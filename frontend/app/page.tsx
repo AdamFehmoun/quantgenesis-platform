@@ -34,6 +34,7 @@ export interface BacktestResult {
     status: string;
     pipeline_start?: string;
   };
+  chart_data?: { date: string; value: number; drawdown: number }[] | null;
 }
 
 export default function Home() {
@@ -68,18 +69,18 @@ export default function Home() {
       <nav className="sticky top-0 z-50 px-8 py-4 flex items-center justify-between"
         style={{ background: 'rgba(6,8,16,0.7)', backdropFilter: 'blur(24px)', borderBottom: '1px solid rgba(123,57,252,0.15)' }}>
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center glow-purple"
-            style={{ background: 'linear-gradient(135deg, #7b39fc, #06B6D4)' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, #7b39fc, #06B6D4)', boxShadow: '0 0 15px rgba(123,57,252,0.3)' }}>
             <span className="text-white font-bold text-sm" style={{ fontFamily: 'Manrope' }}>Q</span>
           </div>
           <span className="font-bold text-white text-lg" style={{ fontFamily: 'Manrope' }}>
-            Quant<span style={{ color: '#7b39fc' }}>Genesis</span>
+            Quant<span style={{ color: '#7b39fc' }}>Clarity</span>
           </span>
         </div>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium"
             style={{ background: 'rgba(123,57,252,0.15)', color: '#a78bfa', border: '1px solid rgba(123,57,252,0.3)', fontFamily: 'Manrope' }}>
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
             Live
           </span>
           <span className="text-xs px-3 py-1.5 rounded-full"
@@ -98,7 +99,7 @@ export default function Home() {
           <span className="text-xs px-2 py-0.5 rounded font-semibold"
             style={{ background: '#7b39fc', color: '#fff', fontFamily: 'Manrope' }}>New</span>
           <span className="text-xs" style={{ color: 'rgba(255,255,255,0.8)', fontFamily: 'Manrope' }}>
-            5 agents IA · Backtest White-Box · AI Act compliant
+            6 agents IA · Backtest White-Box · AI Act compliant
           </span>
         </div>
 
@@ -112,14 +113,14 @@ export default function Home() {
 
         {/* Subtext */}
         <p className="text-lg mb-10 max-w-xl mx-auto" style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter', lineHeight: 1.7 }}>
-          Décris ta stratégie en langage naturel. 5 agents IA construisent, backtestent et expliquent chaque décision — en toute transparence.
+          Décris ta stratégie en langage naturel. 6 agents IA construisent, backtestent et expliquent chaque décision — en toute transparence.
         </p>
 
         {/* CTA buttons */}
         <div className="flex items-center justify-center gap-4 mb-16 flex-wrap">
           <a href="#pipeline"
             className="px-8 py-3.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-105"
-            style={{ background: '#7b39fc', fontFamily: 'Manrope', boxShadow: '0 0 30px rgba(123,57,252,0.4)' }}>
+            style={{ background: '#7b39fc', fontFamily: 'Manrope', boxShadow: '0 0 15px rgba(123,57,252,0.4)' }}>
             Lancer une stratégie →
           </a>
           <a href="#pipeline"
@@ -146,7 +147,7 @@ export default function Home() {
       </section>
 
       {/* DIVIDER */}
-      <div className="relative z-10 max-w-4xl mx-auto px-6 mb-6">
+      <div className="relative z-10 max-w-5xl mx-auto px-6 mb-10">
         <div className="flex items-center gap-4">
           <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(123,57,252,0.3))' }} />
           <span className="text-xs px-4 py-1.5 rounded-full" style={{ background: 'rgba(123,57,252,0.1)', color: '#7b39fc', border: '1px solid rgba(123,57,252,0.2)', fontFamily: 'Manrope' }}>
@@ -157,18 +158,22 @@ export default function Home() {
       </div>
 
       {/* MAIN CONTENT */}
-      <div id="pipeline" className="relative z-10 max-w-4xl mx-auto px-6 pb-20 flex flex-col gap-5">
+      <div id="pipeline" className="relative z-10 max-w-5xl mx-auto px-6 pb-24 flex flex-col gap-10">
         <Chat onResult={setResult} />
         <StrategyHistory onLoad={setResult} />
-        {result && <PerformanceChart />}
-        {result && <WhiteBox result={result} />}
-        {result && <AuditTrail result={result} />}
+        {result && (
+          <div className="flex flex-col gap-10 animate-fade-slide">
+            <PerformanceChart result={result} />
+            <WhiteBox result={result} />
+            <AuditTrail result={result} />
+          </div>
+        )}
       </div>
 
       {/* FOOTER */}
       <footer className="relative z-10 text-center py-10" style={{ borderTop: '1px solid rgba(123,57,252,0.1)' }}>
         <p className="text-xs" style={{ color: '#444', fontFamily: 'Inter' }}>
-          QuantGenesis · ESIEE Paris 2025–2026 · Vos données ne quittent pas votre session · Propulsé par 6 agents IA
+          QuantClarity · ESIEE Paris 2025–2026 · Vos données ne quittent pas votre session · Propulsé par 6 agents IA
         </p>
       </footer>
     </main>

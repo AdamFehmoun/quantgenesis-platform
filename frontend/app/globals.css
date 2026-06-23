@@ -15,13 +15,45 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(123,57,252,0.3); }
-  50% { box-shadow: 0 0 40px rgba(123,57,252,0.6); }
+/* Agent actif : halo lumineux qui respire + bordure qui pulse */
+@keyframes activeAgentGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(123,57,252,0.55), 0 0 28px rgba(123,57,252,0.30), inset 0 0 22px rgba(123,57,252,0.06);
+    border-color: rgba(123,57,252,0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(124,99,252,0.95), 0 0 55px rgba(123,57,252,0.55), inset 0 0 28px rgba(123,57,252,0.12);
+    border-color: rgba(167,139,250,0.95);
+  }
 }
+.active-agent { animation: activeAgentGlow 1.8s ease-in-out infinite; }
+
+/* Avatar de l'agent actif : pulsation lumineuse */
+@keyframes avatarPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(123,57,252,0.45); }
+  70% { box-shadow: 0 0 0 8px rgba(123,57,252,0); }
+}
+.avatar-pulse { animation: avatarPulse 1.6s ease-out infinite; }
+
+/* Révélation des métriques : pop + montée */
+@keyframes metricPop {
+  0% { opacity: 0; transform: translateY(14px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-metric-pop { animation: metricPop 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards; opacity: 0; }
+
+/* Glow doux pour le chiffre hero : se joue UNE fois à l'apparition puis se fige */
+@keyframes heroNumberGlow {
+  from { filter: drop-shadow(0 0 0 rgba(34,197,94,0)); }
+  to { filter: drop-shadow(0 0 18px rgba(34,197,94,0.30)); }
+}
+.hero-number-glow { animation: heroNumberGlow 0.8s ease-out forwards; }
+
+/* Remplissage de jauge animé */
+@keyframes gaugeFill { from { width: 0; } }
+.animate-gauge { animation: gaugeFill 1s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 
 .animate-fade-slide { animation: fadeSlideIn 0.5s ease forwards; }
-.glow-purple { animation: pulse-glow 2s ease-in-out infinite; }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: #060810; }

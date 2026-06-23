@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { Check, X } from 'lucide-react';
 import { BacktestResult } from '../app/page';
 
 interface SavedStrategy {
@@ -68,8 +69,8 @@ export default function StrategyHistory({ onLoad }: StrategyHistoryProps) {
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-white font-semibold">Historique des stratégies</h3>
         {justSaved && (
-          <span className="text-xs px-2 py-1 rounded-full" style={{ background: '#0F3028', color: '#1D9E75' }}>
-            ✓ Sauvegardé
+          <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{ background: '#0F3028', color: '#1D9E75' }}>
+            <Check size={12} strokeWidth={2.5} /> Sauvegardé
           </span>
         )}
       </div>
@@ -136,12 +137,12 @@ export default function StrategyHistory({ onLoad }: StrategyHistoryProps) {
                 </button>
                 <button
                   onClick={() => handleDelete(s.id)}
-                  className="text-xs px-2 py-1.5 rounded-lg transition-all"
+                  className="inline-flex items-center justify-center px-2 py-1.5 rounded-lg transition-all"
                   style={{ background: '#1e2028', color: '#555', border: '1px solid #2a2a2a' }}
                   onMouseEnter={e => (e.currentTarget.style.color = '#E24B4A')}
                   onMouseLeave={e => (e.currentTarget.style.color = '#555')}
                 >
-                  ✕
+                  <X size={14} strokeWidth={2.5} />
                 </button>
               </div>
             </div>
