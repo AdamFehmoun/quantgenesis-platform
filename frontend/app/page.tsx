@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef } from 'react';
+import { Plus } from 'lucide-react';
 import Chat, { type ChatHandle } from "../components/Chat";
 import Onboarding from "../components/Onboarding";
 import PerformanceChart from "../components/PerformanceChart";
@@ -65,6 +66,15 @@ export default function Home() {
     }, 80);
   };
 
+  // « Nouvelle stratégie » — moyen DISCRET de relancer depuis l'écran de résultats :
+  // on efface le résultat courant et on revient à l'onboarding (le grand hero d'accueil
+  // ne réapparaît jamais au-dessus des résultats).
+  const handleNewStrategy = () => {
+    setResult(null);
+    setStarted(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <main className="min-h-screen relative overflow-x-hidden" style={{ background: '#060810' }}>
 
@@ -113,76 +123,32 @@ export default function Home() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium"
+          {/* Relance discrète — remplace le grand hero d'accueil une fois l'analyse lancée */}
+          <button onClick={handleNewStrategy}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold text-white transition-all hover:scale-105"
+            style={{ background: 'rgba(123,57,252,0.18)', color: '#c4b5fd', border: '1px solid rgba(123,57,252,0.4)', fontFamily: 'Manrope' }}>
+            <Plus size={13} strokeWidth={2.5} />
+            Nouvelle stratégie
+          </button>
+          <span className="hidden sm:flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium"
             style={{ background: 'rgba(123,57,252,0.15)', color: '#a78bfa', border: '1px solid rgba(123,57,252,0.3)', fontFamily: 'Manrope' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
             Live
           </span>
-          <span className="text-xs px-3 py-1.5 rounded-full"
+          <span className="hidden md:inline text-xs px-3 py-1.5 rounded-full"
             style={{ background: 'rgba(255,255,255,0.04)', color: '#666', border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'Manrope' }}>
             White-Box AI Trading
           </span>
         </div>
       </nav>
 
-      {/* HERO */}
-      <section className="relative z-10 max-w-4xl mx-auto px-6 pt-20 pb-16 text-center">
-
-        {/* Pill badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8"
-          style={{ background: 'rgba(85,80,110,0.35)', backdropFilter: 'blur(12px)', border: '1px solid rgba(164,132,215,0.4)' }}>
-          <span className="text-xs px-2 py-0.5 rounded font-semibold"
-            style={{ background: '#7b39fc', color: '#fff', fontFamily: 'Manrope' }}>New</span>
-          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.8)', fontFamily: 'Manrope' }}>
-            6 agents IA · Backtest White-Box · AI Act compliant
-          </span>
-        </div>
-
-        {/* Headline */}
-        <h1 className="mb-6 leading-tight" style={{ fontFamily: 'Instrument Serif', fontSize: 'clamp(2.5rem, 6vw, 5rem)', lineHeight: 1.1 }}>
-          <span className="text-white">Le trading est une boîte noire.</span><br />
-          <span style={{ background: 'linear-gradient(90deg, #7b39fc, #06B6D4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            On allume <em>la lumière.</em>
-          </span>
-        </h1>
-
-        {/* Subtext */}
-        <p className="text-lg mb-10 max-w-xl mx-auto" style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter', lineHeight: 1.7 }}>
-          Décris ta stratégie en langage naturel. 6 agents IA construisent, backtestent et expliquent chaque décision — en toute transparence.
-        </p>
-
-        {/* CTA buttons */}
-        <div className="flex items-center justify-center gap-4 mb-16 flex-wrap">
-          <a href="#pipeline"
-            className="px-8 py-3.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-105"
-            style={{ background: '#7b39fc', fontFamily: 'Manrope', boxShadow: '0 0 15px rgba(123,57,252,0.4)' }}>
-            Lancer une stratégie →
-          </a>
-          <a href="#pipeline"
-            className="px-8 py-3.5 rounded-xl font-semibold text-sm transition-all hover:scale-105"
-            style={{ background: 'rgba(43,35,68,0.8)', color: '#f6f7f9', fontFamily: 'Manrope', border: '1px solid rgba(123,57,252,0.3)' }}>
-            Voir la démo
-          </a>
-        </div>
-
-        {/* Stats row */}
-        <div className="flex items-center justify-center gap-10 flex-wrap">
-          {[
-            { value: '6', label: 'Agents IA' },
-            { value: '100%', label: 'Transparent' },
-            { value: 'AI Act', label: 'Compliant' },
-            { value: 'Live', label: 'Backtest réel' },
-          ].map((s) => (
-            <div key={s.label} className="text-center">
-              <p className="text-xl font-bold" style={{ color: '#7b39fc', fontFamily: 'Manrope' }}>{s.value}</p>
-              <p className="text-xs" style={{ color: '#666', fontFamily: 'Inter' }}>{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* HERO d'accueil supprimé du flux de résultats : il faisait doublon avec
+          l'onboarding et réapparaissait au-dessus des résultats (started=true).
+          L'accueil complet reste géré par <Onboarding> (visible uniquement quand
+          !started) ; ici on garde juste le bouton « Nouvelle stratégie » (navbar). */}
 
       {/* DIVIDER */}
-      <div className="relative z-10 max-w-5xl mx-auto px-6 mb-10">
+      <div className="relative z-10 max-w-5xl mx-auto px-6 pt-12 mb-10">
         <div className="flex items-center gap-4">
           <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(123,57,252,0.3))' }} />
           <span className="text-xs px-4 py-1.5 rounded-full" style={{ background: 'rgba(123,57,252,0.1)', color: '#7b39fc', border: '1px solid rgba(123,57,252,0.2)', fontFamily: 'Manrope' }}>

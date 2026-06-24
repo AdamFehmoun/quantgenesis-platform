@@ -103,6 +103,15 @@ body {
   border-color: rgba(123, 57, 252, 0.7) !important;
   background: rgba(123, 57, 252, 0.12) !important;
 }
+/* Onboarding — raccourcis de test « Exemples rapides » */
+.qt-chip:hover {
+  transform: translateY(-2px);
+  border-color: rgba(6, 182, 212, 0.55) !important;
+  background: rgba(123, 57, 252, 0.1) !important;
+  color: #f4f3f8 !important;
+}
+.qt-chip .qt-play { opacity: 0.5; transition: opacity 0.2s ease; }
+.qt-chip:hover .qt-play { opacity: 1; }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: #060810; }

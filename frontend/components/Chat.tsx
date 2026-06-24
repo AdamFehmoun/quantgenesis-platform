@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   Brain, ClipboardList, Cog, Code2, Scale, Target,
-  Coins, TrendingUp, TrendingDown, AlertTriangle,
+  Coins, TrendingUp, TrendingDown, AlertTriangle, Info,
   type LucideIcon,
 } from 'lucide-react';
 import { BacktestResult } from '../app/page';
@@ -48,6 +48,89 @@ const TYPING_SPEED = 18;     // ms par tick de "typing"
 const TYPING_CHUNK = 2;      // caractères ajoutés par tick
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// --- Pédagogie des métriques : tooltips + badges qualitatifs --------------
+// Explications COURTES en français affichées via une icône "i" (survol + clic,
+// robuste sur tactile). Aucune logique de données : on lit les valeurs backend.
+
+type QualTone = 'good' | 'mid' | 'bad';
+interface QualBadge { label: string; tone: QualTone; }
+
+const TONE_STYLE: Record<QualTone, { color: string; bg: string; border: string }> = {
+  good: { color: '#22c55e', bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.45)' },
+  mid:  { color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.45)' },
+  bad:  { color: '#F87171', bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.45)' },
+};
+
+function sharpeBadge(v: number): QualBadge {
+  if (v >= 1) return { label: 'Bon', tone: 'good' };
+  if (v >= 0) return { label: 'Moyen', tone: 'mid' };
+  return { label: 'Faible', tone: 'bad' };
+}
+function drawdownBadge(v: number): QualBadge {
+  const dd = Math.abs(v);
+  if (dd < 15) return { label: 'Maîtrisé', tone: 'good' };
+  if (dd <= 30) return { label: 'Modéré', tone: 'mid' };
+  return { label: 'Élevé', tone: 'bad' };
+}
+function winRateBadge(v: number): QualBadge {
+  if (v >= 55) return { label: 'Bon', tone: 'good' };
+  if (v >= 45) return { label: 'Moyen', tone: 'mid' };
+  return { label: 'Faible', tone: 'bad' };
+}
+
+// Badge qualitatif coloré, lisible de loin (pour le stand).
+function QualBadgeChip({ badge }: { badge: QualBadge }) {
+  const t = TONE_STYLE[badge.tone];
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
+      style={{ background: t.bg, color: t.color, border: `1px solid ${t.border}`, fontFamily: 'Manrope' }}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: t.color, boxShadow: `0 0 6px ${t.color}` }} />
+      {badge.label}
+    </span>
+  );
+}
+
+// Icône "i" + bulle d'explication. Survol (desktop) ET clic (tactile/mobile).
+function InfoTooltip({ text, placement = 'top' }: { text: string; placement?: 'top' | 'bottom' }) {
+  const [open, setOpen] = useState(false);
+  const pos: React.CSSProperties = placement === 'top'
+    ? { bottom: 'calc(100% + 8px)' }
+    : { top: 'calc(100% + 8px)' };
+  return (
+    <span className="relative inline-flex items-center"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}>
+      <button type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        aria-label="Explication"
+        className="inline-flex items-center justify-center transition-opacity hover:opacity-100"
+        style={{ opacity: 0.55, cursor: 'help', background: 'transparent', lineHeight: 0 }}>
+        <Info size={13} color="#a78bfa" strokeWidth={2} />
+      </button>
+      {open && (
+        <span role="tooltip"
+          className="absolute z-50 left-1/2 -translate-x-1/2 px-3 py-2 rounded-lg text-left normal-case"
+          style={{
+            ...pos,
+            width: 210,
+            background: 'rgba(10,8,20,0.97)',
+            border: '1px solid rgba(123,57,252,0.45)',
+            color: 'rgba(244,243,248,0.88)',
+            fontFamily: 'Inter',
+            fontSize: 11,
+            fontWeight: 400,
+            letterSpacing: 'normal',
+            lineHeight: 1.5,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.55)',
+            backdropFilter: 'blur(12px)',
+          }}>
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
 
 // --- Helpers d'extraction défensifs (chaque champ peut être absent) ---
 function pickString(obj: unknown, keys: string[]): string | null {
@@ -370,6 +453,10 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
   // --- Écran d'attente plein écran : monté tant qu'un vrai run est en cours,
   // démonté dès la révélation (Waiting s'auto-anime et se coupe à son démontage).
   const showWaiting = USE_WAITING_SCREEN && loading && startedRealRunRef.current && !revealed;
+  // Résultats affichés → on masque tout le « chrome » du pipeline (titre, chips,
+  // champ Analyser, liste des 6 agents « ✓ Complété ») : doublon inutile au-dessus
+  // des résultats. Relance possible via « + Nouvelle stratégie » (navbar).
+  const showResults = revealed && !!result;
   const examples = ['momentum Bitcoin drawdown 10%', 'ETH RSI 14 mean reversion', 'BTC/ETH ratio trading'];
 
   return (
@@ -380,15 +467,21 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
     <div className="rounded-2xl overflow-hidden"
       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)', boxShadow: '0 10px 40px rgba(0,0,0,0.35)' }}>
 
-      {/* Header */}
+      {/* Header — masqué une fois les résultats affichés (doublon inutile) */}
+      {!showResults && (
       <div className="px-6 py-4 flex items-center gap-3"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(123,57,252,0.05)' }}>
         <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
         <span className="text-sm font-semibold text-white" style={{ fontFamily: 'Manrope' }}>Pipeline IA — 6 agents</span>
         <span className="ml-auto text-xs" style={{ color: '#555', fontFamily: 'Inter' }}>QuantClarity v1</span>
       </div>
+      )}
 
       <div className="p-6">
+        {/* Exemples + champ Analyser — masqués quand les résultats sont là (relance
+            via « + Nouvelle stratégie » dans la navbar). */}
+        {!showResults && (
+        <>
         {/* Exemples */}
         <div className="flex gap-2 mb-5 flex-wrap">
           {examples.map((ex) => (
@@ -507,6 +600,8 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
             </div>
           </div>
         )}
+        </>
+        )}
 
         {/* Error */}
         {error && (
@@ -577,6 +672,7 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
                         <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: '#9aa7b8', fontFamily: 'Manrope' }}>
                           Total Return
                         </p>
+                        <InfoTooltip text="Le gain (ou la perte) total sur toute la période testée." placement="bottom" />
                       </div>
                       <p className={`font-bold leading-none ${positive ? 'hero-number-glow' : ''}`}
                         style={{ color: accent, fontFamily: 'Manrope', fontSize: 'clamp(3.2rem, 9vw, 5rem)', letterSpacing: '-0.03em' }}>
@@ -598,26 +694,26 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
             {/* EXPLICATION — résumé conformité + interprétation FR des métriques */}
             <Explanation result={result} />
 
-            {/* MÉTRIQUES SECONDAIRES — plus grandes, couleurs sémantiques, jauges */}
+            {/* MÉTRIQUES SECONDAIRES — tooltips pédagogiques + badges qualitatifs */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
                 {
                   label: 'Sharpe Ratio', Icon: TrendingUp, color: '#a78bfa',
                   value: `${result.metrics.sharpe_ratio}`,
-                  pct: Math.min(Math.max(result.metrics.sharpe_ratio, 0) / 4 * 100, 100),
-                  hint: 'rendement / risque',
+                  info: 'Mesure si les gains valent le risque pris. Au-dessus de 1 = bon, négatif = mauvais.',
+                  badge: sharpeBadge(result.metrics.sharpe_ratio),
                 },
                 {
                   label: 'Max Drawdown', Icon: TrendingDown, color: '#F87171',
                   value: `-${Math.abs(result.metrics.max_drawdown_pct)}%`,
-                  pct: Math.min(Math.abs(result.metrics.max_drawdown_pct), 100),
-                  hint: 'perte maximale',
+                  info: 'La pire perte subie depuis un sommet. Plus c\'est petit (proche de 0), mieux c\'est.',
+                  badge: drawdownBadge(result.metrics.max_drawdown_pct),
                 },
                 {
                   label: 'Win Rate', Icon: Target, color: '#06B6D4',
                   value: `${result.metrics.win_rate_pct}%`,
-                  pct: Math.min(Math.max(result.metrics.win_rate_pct, 0), 100),
-                  hint: 'trades gagnants',
+                  info: 'Le pourcentage de trades gagnants.',
+                  badge: winRateBadge(result.metrics.win_rate_pct),
                 },
               ].map((m, idx) => {
                 const Icon = m.Icon;
@@ -631,16 +727,13 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
                   <div className="flex items-center gap-2 mb-3">
                     <Icon size={16} color={m.color} strokeWidth={2} />
                     <p className="text-xs font-medium" style={{ color: '#8a96a8', fontFamily: 'Inter' }}>{m.label}</p>
+                    <InfoTooltip text={m.info} />
                   </div>
                   <p className="font-bold mb-3" style={{ color: m.color, fontFamily: 'Manrope', fontSize: '2.1rem', letterSpacing: '-0.02em', textShadow: `0 0 12px ${m.color}55` }}>
                     {m.value}
                   </p>
-                  {/* jauge contextuelle */}
-                  <div className="w-full rounded-full h-1.5 overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                    <div className="h-1.5 rounded-full animate-gauge"
-                      style={{ width: `${m.pct}%`, background: `linear-gradient(90deg, ${m.color}, ${m.color}aa)`, boxShadow: `0 0 5px ${m.color}88` }} />
-                  </div>
-                  <p className="text-[10px] mt-2" style={{ color: '#556', fontFamily: 'Inter' }}>{m.hint}</p>
+                  {/* badge qualitatif — plus parlant qu'une jauge normalisée arbitrairement */}
+                  <QualBadgeChip badge={m.badge} />
                 </div>
                 );
               })}

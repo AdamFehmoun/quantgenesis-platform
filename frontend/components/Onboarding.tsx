@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Compass, GraduationCap, Zap, TrendingUp, Repeat, Sparkles,
   Bitcoin, Gem, BarChart3, Shield, Scale, Flame, Calendar, Mountain,
-  Coins, Rocket, ArrowRight, Send, RotateCcw,
+  Coins, Rocket, ArrowRight, Send, RotateCcw, FlaskConical, Play,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -111,6 +111,15 @@ const QUESTIONS: Record<'debute' | 'connais', Question[]> = {
 };
 
 const CHIP_LABELS = ['Réaction', 'Marché', 'Risque', 'Durée', 'Capital'];
+
+// Raccourcis de test : intents prédéfinis (en cache → réponse rapide). Au clic,
+// ils appellent directement onLaunch() avec l'intent EXACT, en sautant l'onboarding
+// guidé. Commodité de test → vrais runs, pas de faux résultats.
+const QUICK_TESTS: { Icon: LucideIcon; label: string; intent: string }[] = [
+  { Icon: Gem, label: 'Bollinger · ETH · modéré', intent: 'stratégie bollinger modérée moyen terme sur Ethereum' },
+  { Icon: Bitcoin, label: 'RSI · BTC · agressif', intent: 'stratégie RSI agressive court terme sur Bitcoin' },
+  { Icon: Bitcoin, label: 'RSI · BTC · prudent', intent: 'stratégie RSI prudente long terme sur Bitcoin' },
+];
 
 const WELCOME_CARDS: { Icon: LucideIcon; title: string; sub: string; cta: string; level: Level; accent: string }[] = [
   { Icon: Compass, title: 'Je débute', sub: 'On vous guide pas à pas, en mots simples', cta: 'Commencer', level: 'debute', accent: '#7b39fc' },
@@ -370,6 +379,29 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#06B6D4' }} />
                 Environnement de test — aucun capital réel engagé
               </span>
+
+              {/* RACCOURCIS DE TEST — discrets, lancent un intent prédéfini (en cache,
+                  réponse rapide) directement via onLaunch, sans passer par l'onboarding. */}
+              <div className="mt-10 flex flex-col items-center">
+                <span className="inline-flex items-center gap-1.5 text-[0.65rem] uppercase mb-3"
+                  style={{ color: 'rgba(244,243,248,0.32)', fontFamily: 'Manrope', letterSpacing: '0.22em' }}>
+                  <FlaskConical size={12} color="#06B6D4" strokeWidth={2} /> Exemples rapides
+                </span>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {QUICK_TESTS.map((t) => {
+                    const Icon = t.Icon;
+                    return (
+                      <button key={t.intent} onClick={() => onLaunch(t.intent)} title={t.intent}
+                        className="qt-chip inline-flex items-center gap-2 rounded-full transition-all"
+                        style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(123,57,252,0.22)', color: 'rgba(244,243,248,0.62)', fontFamily: 'Inter', fontSize: '0.78rem', fontWeight: 500 }}>
+                        <Icon size={14} color="#a78bfa" strokeWidth={2} />
+                        <span>{t.label}</span>
+                        <Play size={11} color="#06B6D4" strokeWidth={2.5} className="qt-play" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </>
