@@ -315,6 +315,9 @@ def _run_pipeline_uncached(
 
     backtest_result: dict[str, Any] | None = None
     executed_code: str | None = None
+    # Code stratégie PROPRE (sans la plomberie d'injection print/CHART_DATA),
+    # exposé tel quel à la White-Box du front (backtest.generated_code).
+    generated_code: str | None = None
     # `last_sandbox_result` garde la dernière réponse brute de la sandbox pour
     # la persistance SandboxLog (audit). `backtest_result` peut être réécrit
     # en FALLBACK pour l'enveloppe API. Voir la boucle plus bas.
@@ -324,6 +327,9 @@ def _run_pipeline_uncached(
         from agents.codeur import generate_code
         _codeur_out = generate_code(spec=final_spec, user_intent=intent)
         code = _codeur_out["code"]
+        # On capture le code PROPRE ici, AVANT l'injection de plomberie
+        # (print metrics + CHART_DATA) faite juste en dessous sur `code`.
+        generated_code = code or None
 
         if code:
             code += """
@@ -417,6 +423,15 @@ except Exception as _qg_exc:
     # le voie tel quel dans `body.backtest.status` (contrat explicite Maxime).
     if backtest_result is not None:
         backtest_result = {**backtest_result, "status": backtest_status}
+        # WHITE-BOX (jury) : on expose le code stratégie PROPRE sous
+        # backtest.generated_code (clé lue par WhiteBox.tsx). Ajouté ICI, avant
+        # la construction du payload ET la mise en cache Redis, donc embarqué
+        # dans l'objet caché → les futurs HIT l'auront aussi. En FALLBACK le
+        # code reste présent (il a bien été généré) ; en l'absence de code
+        # (REJECTED/skip) backtest_result vaut None, le champ est simplement
+        # absent et rien ne crashe.
+        if generated_code:
+            backtest_result["generated_code"] = generated_code
 
     metrics = _build_metrics(backtest_result, backtest_status)
 

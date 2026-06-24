@@ -1,14 +1,27 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   Brain, ClipboardList, Cog, Code2, Scale, Target,
   Coins, TrendingUp, TrendingDown, AlertTriangle,
   type LucideIcon,
 } from 'lucide-react';
 import { BacktestResult } from '../app/page';
+import { getTradesCount } from '../lib/metrics';
+import Waiting from './Waiting';
+import Explanation from './Explanation';
+
+// Écran d'attente plein écran (design « Attente ») pendant un vrai run.
+// Mettre à false pour revenir à l'animation inline des 6 agents (préservée).
+const USE_WAITING_SCREEN = true;
 
 interface ChatProps {
   onResult: (result: BacktestResult) => void;
+}
+
+// API impérative exposée au parent : permet à l'onboarding de lancer le
+// pipeline EXISTANT avec un intent construit, sans toucher à sa logique.
+export interface ChatHandle {
+  start: (intent: string) => void;
 }
 
 const AGENTS: { name: string; role: string; Icon: LucideIcon; color: string }[] = [
@@ -67,11 +80,13 @@ function traceFor(r: BacktestResult, name: string): string | null {
   return String(val);
 }
 
-function getWarning(metrics: BacktestResult['metrics']): string | null {
+function getWarning(result: BacktestResult): string | null {
+  const metrics = result.metrics;
   if (!metrics) return null;
   if (metrics.sharpe_ratio > 5) return '⚠️ Sharpe > 5 — possible overfitting';
   if (metrics.max_drawdown_pct === 0) return '⚠️ Drawdown nul — vérifier les données';
-  if (metrics.num_trades < 5) return '⚠️ Trop peu de trades pour être significatif';
+  const trades = getTradesCount(result);
+  if (trades !== null && trades < 5) return '⚠️ Trop peu de trades pour être significatif';
   if (metrics.win_rate_pct > 90) return '⚠️ Win rate trop élevé — possible look-ahead bias';
   return null;
 }
@@ -115,7 +130,7 @@ function enrichAgent(name: string, r: BacktestResult): string | null {
         return null;
       }
       case 'Critique': {
-        const warning = getWarning(r.metrics);
+        const warning = getWarning(r);
         if (warning) return `${r.status || 'Validé'} — ${warning.replace(/^⚠️\s*/, '')}`;
         if (r.status) return `Verdict : ${r.status}.`;
         return null;
@@ -128,7 +143,7 @@ function enrichAgent(name: string, r: BacktestResult): string | null {
   }
 }
 
-export default function Chat({ onResult }: ChatProps) {
+function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
   const [intent, setIntent] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
@@ -234,15 +249,28 @@ export default function Chat({ onResult }: ChatProps) {
 
   // Révélation des résultats = max(fin d'animation, arrivée de la réponse/erreur).
   useEffect(() => {
-    if (!animationDone) return;
-    if (!result && !error) return; // MISS lent : on attend encore la réponse
-    setMessages((prev) => prev.map((m) => ({ ...m, done: true })));
+    if (!result && !error) return; // pas encore de réponse
+    // Avec l'écran d'attente : on révèle DÈS que la réponse arrive (cache 0,3s
+    // comme run 2min30) — l'attente s'auto-anime, aucune durée fixe à attendre,
+    // et son démontage coupe net l'animation. Sans écran d'attente : on conserve
+    // l'ancien comportement (attendre la fin de l'animation inline).
+    if (!USE_WAITING_SCREEN && !animationDone) return;
+    setMessages((prev) =>
+      USE_WAITING_SCREEN
+        ? AGENTS.map((agent) => ({ agent, done: true, text: agent.role, fullText: agent.role }))
+        : prev.map((m) => ({ ...m, done: true })),
+    );
     setRevealed(true);
     setLoading(false);
   }, [animationDone, result, error]);
 
-  const handleAnalyse = async () => {
-    if (!intent.trim() || loading) return;
+  const handleAnalyse = async (intentOverride?: string) => {
+    // intentOverride (string) = lancement piloté par l'onboarding. Sinon on lit
+    // l'input local. Garde sur le typeof : onClick passe un événement, pas un intent.
+    const source = typeof intentOverride === 'string' ? intentOverride : intent;
+    const effectiveIntent = source.trim();
+    if (!effectiveIntent || loading) return;
+    if (typeof intentOverride === 'string') setIntent(effectiveIntent);
     // Coupe immédiatement la boucle d'ambiance et empêche toute reprise future.
     startedRealRunRef.current = true;
     ambianceTokenRef.current++;
@@ -261,7 +289,7 @@ export default function Chat({ onResult }: ChatProps) {
         const res = await fetch('https://quantgenesis-platform-production.up.railway.app/api/pipeline/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ intent }),
+          body: JSON.stringify({ intent: effectiveIntent }),
         });
         if (runIdRef.current !== myRun) return;
         if (!res.ok) {
@@ -289,8 +317,8 @@ export default function Chat({ onResult }: ChatProps) {
           const entry = {
             id: `${Date.now()}`,
             savedAt: new Date().toISOString(),
-            intent: data.intent || intent,
-            strategy_name: data.strategy_name || data.intent || intent,
+            intent: data.intent || effectiveIntent,
+            strategy_name: data.strategy_name || data.intent || effectiveIntent,
             status: data.status,
             metrics: data.metrics,
             full: data,
@@ -309,8 +337,11 @@ export default function Chat({ onResult }: ChatProps) {
       }
     })();
 
-    // (b) Animation — rythme FIXE, totalement indépendante du réseau/cache.
+    // (b) Animation des agents. Avec l'écran d'attente actif, Waiting.tsx gère
+    // TOUTE l'animation en boucle continue → on ne lance pas l'animation inline
+    // (qui avait une durée fixe et figeait en fin de course).
     const animation = (async () => {
+      if (USE_WAITING_SCREEN) return;
       for (let i = 0; i < AGENTS.length; i++) {
         if (runIdRef.current !== myRun) return;
         if (errorRef.current) break; // une erreur API stoppe l'animation
@@ -327,19 +358,31 @@ export default function Chat({ onResult }: ChatProps) {
     await Promise.allSettled([apiCall, animation]);
   };
 
+  // Le parent (onboarding) déclenche le pipeline existant via cette poignée.
+  useImperativeHandle(ref, () => ({
+    start: (i: string) => { void handleAnalyse(i); },
+  }));
+
   const isFallback = !!result && (result.backtest?.status === 'FALLBACK' || result.status === 'FALLBACK');
   const totalAgents = AGENTS.length;
   const doneCount = messages.filter((m) => m.done).length;
   const progressPct = revealed ? 100 : Math.min(Math.round((doneCount / totalAgents) * 100), 95);
+  // --- Écran d'attente plein écran : monté tant qu'un vrai run est en cours,
+  // démonté dès la révélation (Waiting s'auto-anime et se coupe à son démontage).
+  const showWaiting = USE_WAITING_SCREEN && loading && startedRealRunRef.current && !revealed;
   const examples = ['momentum Bitcoin drawdown 10%', 'ETH RSI 14 mean reversion', 'BTC/ETH ratio trading'];
 
   return (
+    <>
+    {showWaiting && (
+      <Waiting agents={AGENTS.map((a) => ({ name: a.name, color: a.color, Icon: a.Icon }))} />
+    )}
     <div className="rounded-2xl overflow-hidden"
-      style={{ background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(123,57,252,0.2)', backdropFilter: 'blur(24px)' }}>
+      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)', boxShadow: '0 10px 40px rgba(0,0,0,0.35)' }}>
 
       {/* Header */}
       <div className="px-6 py-4 flex items-center gap-3"
-        style={{ borderBottom: '1px solid rgba(123,57,252,0.12)', background: 'rgba(123,57,252,0.05)' }}>
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(123,57,252,0.05)' }}>
         <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
         <span className="text-sm font-semibold text-white" style={{ fontFamily: 'Manrope' }}>Pipeline IA — 6 agents</span>
         <span className="ml-auto text-xs" style={{ color: '#555', fontFamily: 'Inter' }}>QuantClarity v1</span>
@@ -368,7 +411,7 @@ export default function Chat({ onResult }: ChatProps) {
             disabled={loading}
             onKeyDown={(e) => e.key === 'Enter' && handleAnalyse()}
           />
-          <button onClick={handleAnalyse} disabled={loading}
+          <button onClick={() => handleAnalyse()} disabled={loading}
             className="px-6 py-3 rounded-xl font-semibold text-sm text-white transition-all disabled:opacity-40 hover:scale-105"
             style={{ background: '#7b39fc', fontFamily: 'Manrope', boxShadow: loading ? 'none' : '0 0 12px rgba(123,57,252,0.4)' }}>
             {loading ? (
@@ -489,14 +532,14 @@ export default function Chat({ onResult }: ChatProps) {
           <div className="mt-2 animate-fade-slide">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] mb-1" style={{ color: '#7b39fc', fontFamily: 'Manrope' }}>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] mb-1" style={{ color: '#06B6D4', fontFamily: 'Manrope' }}>
                   Résultats du backtest
                 </p>
                 <p className="text-white font-bold text-lg" style={{ fontFamily: 'Manrope' }}>
                   {result.strategy_name || result.intent || 'Résultats'}
                 </p>
-                <p className="text-xs mt-0.5" style={{ color: '#555', fontFamily: 'Inter' }}>
-                  Backtest terminé · {result.metrics.num_trades} trades
+                <p className="text-xs mt-0.5" style={{ color: 'rgba(244,243,248,0.5)', fontFamily: 'Inter' }}>
+                  Backtest terminé · {getTradesCount(result) ?? 'n/a'} trades
                 </p>
               </div>
               <span className="text-xs px-3 py-1.5 rounded-full font-semibold"
@@ -552,6 +595,9 @@ export default function Chat({ onResult }: ChatProps) {
               );
             })()}
 
+            {/* EXPLICATION — résumé conformité + interprétation FR des métriques */}
+            <Explanation result={result} />
+
             {/* MÉTRIQUES SECONDAIRES — plus grandes, couleurs sémantiques, jauges */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
@@ -600,15 +646,19 @@ export default function Chat({ onResult }: ChatProps) {
               })}
             </div>
 
-            {getWarning(result.metrics) && (
+            {getWarning(result) && (
               <div className="mt-4 p-3 rounded-xl text-xs"
                 style={{ background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.2)', color: '#FAC775', fontFamily: 'Inter' }}>
-                {getWarning(result.metrics)}
+                {getWarning(result)}
               </div>
             )}
           </div>
         )}
       </div>
     </div>
+    </>
   );
 }
+
+const Chat = forwardRef(ChatInner);
+export default Chat;

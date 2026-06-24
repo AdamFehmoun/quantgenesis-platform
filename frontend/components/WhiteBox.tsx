@@ -28,23 +28,25 @@ export default function WhiteBox({ result }: WhiteBoxProps) {
 
   return (
     <div className="rounded-2xl overflow-hidden"
-      style={{ background: 'rgba(10,8,20,0.7)', border: '1px solid rgba(123,57,252,0.2)', backdropFilter: 'blur(24px)' }}>
+      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)', boxShadow: '0 10px 40px rgba(0,0,0,0.35)' }}>
 
       <div className="px-6 py-4 flex items-center gap-3"
-        style={{ borderBottom: '1px solid rgba(123,57,252,0.12)', background: 'rgba(123,57,252,0.05)' }}>
-        <span className="flex items-center gap-2 text-sm font-semibold text-white" style={{ fontFamily: 'Manrope' }}>
-          <Eye size={16} color="#a78bfa" strokeWidth={2} /> White-Box
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(123,57,252,0.05)' }}>
+        <span className="flex-none w-8 h-8 rounded-lg flex items-center justify-center"
+          style={{ background: 'rgba(123,57,252,0.14)', border: '1px solid rgba(123,57,252,0.3)' }}>
+          <Eye size={16} color="#a78bfa" strokeWidth={2} />
         </span>
-        <span className="text-xs" style={{ color: '#666', fontFamily: 'Inter' }}>Transparence totale — code + conformité AI Act</span>
+        <span className="text-sm font-semibold text-white" style={{ fontFamily: 'Manrope' }}>White-Box</span>
+        <span className="text-xs" style={{ color: 'rgba(244,243,248,0.5)', fontFamily: 'Inter' }}>Transparence totale — code + conformité AI Act</span>
       </div>
 
       {/* Tabs */}
-      <div className="flex" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+      <div className="flex" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
         {(['code', 'compliance'] as const).map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className="px-6 py-3 text-xs font-semibold transition-all flex items-center gap-2"
             style={{
-              color: activeTab === tab ? '#a78bfa' : '#555',
+              color: activeTab === tab ? '#a78bfa' : 'rgba(244,243,248,0.45)',
               borderBottom: activeTab === tab ? '2px solid #7b39fc' : '2px solid transparent',
               background: 'transparent',
               fontFamily: 'Manrope',
@@ -61,7 +63,7 @@ export default function WhiteBox({ result }: WhiteBoxProps) {
           <>
             {/* FIX overflow : word-break + white-space pre-wrap */}
             <div className="rounded-xl p-4 mb-4 overflow-auto max-h-72"
-              style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(123,57,252,0.15)' }}>
+              style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <pre className="text-xs font-mono leading-relaxed"
                 style={{ color: '#a78bfa', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'monospace' }}>
                 {generatedCode}
@@ -69,7 +71,7 @@ export default function WhiteBox({ result }: WhiteBoxProps) {
             </div>
             <button onClick={handleExport}
               className="w-full py-3 rounded-xl font-semibold text-sm text-white transition-all hover:scale-[1.01] flex items-center justify-center gap-2"
-              style={{ background: '#7b39fc', fontFamily: 'Manrope', boxShadow: '0 0 12px rgba(123,57,252,0.3)' }}>
+              style={{ background: 'linear-gradient(120deg,#7b39fc,#06B6D4)', fontFamily: 'Manrope', boxShadow: '0 8px 24px rgba(123,57,252,0.35)' }}>
               <Download size={16} strokeWidth={2} /> Exporter strategy.py
             </button>
           </>
@@ -80,22 +82,22 @@ export default function WhiteBox({ result }: WhiteBoxProps) {
             {compliance ? (
               Object.entries(compliance).map(([key, value]) => (
                 <div key={key} className="flex justify-between items-start p-4 rounded-xl"
-                  style={{ background: 'rgba(123,57,252,0.05)', border: '1px solid rgba(123,57,252,0.12)' }}>
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
                   <div className="flex-1 min-w-0 pr-3">
                     <p className="text-sm font-semibold text-white mb-0.5" style={{ fontFamily: 'Manrope' }}>{key}</p>
                     {typeof value === 'object' && value !== null ? (
                       <details className="wb-details">
-                        <summary className="text-xs break-words" style={{ color: '#555', cursor: 'pointer', fontFamily: 'Inter' }}>
+                        <summary className="text-xs break-words" style={{ color: 'rgba(244,243,248,0.5)', cursor: 'pointer', fontFamily: 'Inter' }}>
                           {JSON.stringify(value).slice(0, 100)}
-                          <span className="wb-toggle" style={{ color: '#a78bfa', marginLeft: 6, fontWeight: 600 }} />
+                          <span className="wb-toggle" style={{ color: '#06B6D4', marginLeft: 6, fontWeight: 600 }} />
                         </summary>
                         <pre className="text-xs mt-2 p-3 rounded-lg"
-                          style={{ color: '#999', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(123,57,252,0.15)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace' }}>
+                          style={{ color: 'rgba(244,243,248,0.6)', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', overflowX: 'auto', whiteSpace: 'pre', fontFamily: 'monospace' }}>
                           {JSON.stringify(value, null, 2)}
                         </pre>
                       </details>
                     ) : (
-                      <p className="text-xs break-words" style={{ color: '#555', fontFamily: 'Inter' }}>{String(value)}</p>
+                      <p className="text-xs break-words" style={{ color: 'rgba(244,243,248,0.5)', fontFamily: 'Inter' }}>{String(value)}</p>
                     )}
                   </div>
                   <span className="inline-flex items-center px-2 py-1 rounded-full ml-2 flex-shrink-0"
@@ -105,7 +107,7 @@ export default function WhiteBox({ result }: WhiteBoxProps) {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-center py-8" style={{ color: '#555', fontFamily: 'Inter' }}>
+              <p className="text-sm text-center py-8" style={{ color: 'rgba(244,243,248,0.5)', fontFamily: 'Inter' }}>
                 Log de conformité non disponible
               </p>
             )}
