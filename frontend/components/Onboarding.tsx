@@ -146,6 +146,13 @@ const WELCOME_CARDS: { Icon: LucideIcon; title: string; sub: string; cta: string
   { Icon: Zap, title: 'Je tape directement', sub: 'Décrivez votre stratégie librement', cta: 'Écrire', level: 'direct', accent: '#06B6D4' },
 ];
 
+// Animation "power-on" (la boîte noire qui s'allume) — jouée UNE SEULE FOIS par
+// chargement de page. Flag en mémoire (module-level) : il SURVIT aux remontages du
+// composant (retour à l'accueil via « Nouvelle stratégie » → setStarted(false) qui
+// remonte <Onboarding>), donc l'animation ne se rejoue pas. Il se réinitialise à un
+// vrai refresh (F5), ce qui est le comportement voulu. Pas de localStorage (non supporté).
+let hasPoweredOn = false;
+
 export default function Onboarding({ onLaunch }: OnboardingProps) {
   const [phase, setPhase] = useState<'welcome' | 'chat'>('welcome');
   const [level, setLevel] = useState<Level | null>(null);
@@ -157,6 +164,9 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
   const [noteDraft, setNoteDraft] = useState('');
   const [directDraft, setDirectDraft] = useState('');
   const [lit, setLit] = useState(false);
+  // revealed=false → écran "éteint" (overlay sombre). Au tout premier chargement on
+  // démarre éteint puis on allume ; aux remontages suivants on démarre déjà allumé.
+  const [revealed, setRevealed] = useState(hasPoweredOn);
 
   // Refs pour lire l'état "frais" dans les enchaînements scriptés (timers).
   const levelRef = useRef<Level | null>(null);
@@ -171,6 +181,21 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
   const at = (fn: () => void, ms: number) => { timers.current.push(setTimeout(fn, ms)); };
 
   useEffect(() => () => { clearTimers(); lightTimers.current.forEach(clearTimeout); }, []);
+
+  // POWER-ON : on laisse le navigateur peindre l'état "éteint" une frame, puis on
+  // allume → la transition CSS d'opacité de l'overlay se déclenche (~1,6 s).
+  // Gating sur `revealed` (et NON sur le flag module) : indispensable car le
+  // StrictMode de Next.js en dev monte→démonte→remonte les effets. Le cleanup
+  // annule le timer ; comme `revealed` est encore false au remontage, on le
+  // reprogramme bien (un gating sur hasPoweredOn laisserait l'écran éteint à jamais).
+  // hasPoweredOn passe à true ici → au remontage du composant (« Nouvelle
+  // stratégie »), `revealed` s'initialise déjà à true et l'animation ne rejoue pas.
+  useEffect(() => {
+    if (revealed) return;
+    hasPoweredOn = true;
+    const id = setTimeout(() => setRevealed(true), 60);
+    return () => clearTimeout(id);
+  }, [revealed]);
 
   // Mise en lumière de l'accueil (bloom qui s'allume, en boucle douce).
   useEffect(() => {
@@ -312,6 +337,16 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
 
   return (
     <div className="fixed inset-0 overflow-y-auto" style={{ zIndex: 60, background: '#060810', color: '#f4f3f8', fontFamily: 'Inter, sans-serif' }}>
+      {/* POWER-ON — voile "éteint" (presque noir) qui se lève en fondu au premier
+          chargement, comme une lumière qu'on allume. pointer-events:none → ne bloque
+          jamais l'interaction. Une fois allumé (revealed), opacité 0 = invisible. */}
+      <div aria-hidden style={{
+        position: 'fixed', inset: 0, zIndex: 90, pointerEvents: 'none',
+        background: 'radial-gradient(circle at 50% 44%, rgba(4,3,12,0.9) 0%, #02030a 58%)',
+        opacity: revealed ? 0 : 1,
+        transition: 'opacity 1.6s cubic-bezier(.22,.61,.36,1)',
+      }} />
+
       {/* Glows d'ambiance (cohérents avec page.tsx) */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <div style={{ position: 'absolute', top: '-20%', left: '-10%', width: '640px', height: '640px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(123,57,252,0.18) 0%, transparent 66%)', filter: 'blur(40px)' }} />
