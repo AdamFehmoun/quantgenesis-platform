@@ -1,5 +1,6 @@
 'use client';
 import { Fragment, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   Compass, GraduationCap, Zap, TrendingUp, Repeat, Sparkles,
   Bitcoin, Gem, BarChart3, Shield, Scale, Flame, Calendar, Mountain,
@@ -364,6 +365,12 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
           </span>
         </div>
         <div className="flex items-center gap-4">
+          {!isChat && (
+            <Link href="/technique" className="flex items-center gap-1.5 text-xs transition-colors hover:text-white"
+              style={{ color: 'rgba(244,243,248,0.45)', fontFamily: 'Manrope', letterSpacing: '0.04em' }}>
+              <Boxes size={13} strokeWidth={2} /> Architecture technique
+            </Link>
+          )}
           {isChat && (
             <button onClick={reset} className="flex items-center gap-1.5 text-xs transition-colors hover:text-white"
               style={{ color: 'rgba(244,243,248,0.5)', fontFamily: 'Manrope', letterSpacing: '0.04em' }}>
