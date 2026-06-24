@@ -651,18 +651,20 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
             {/* HERO METRIC — Total Return, le chiffre que le jury regarde */}
             {(() => {
               const tr = result.metrics.total_return_pct;
-              const positive = tr >= 0;
-              const accent = positive ? '#22c55e' : '#F87171';
+              // Défensif (cf. lib/metrics.ts) : null/undefined/NaN en FALLBACK/ERROR.
+              const hasTr = typeof tr === 'number' && Number.isFinite(tr);
+              const positive = hasTr && tr >= 0;
+              const accent = !hasTr ? '#9aa7b8' : positive ? '#22c55e' : '#F87171';
               return (
                 <div className="rounded-2xl p-7 mb-4 relative overflow-hidden animate-metric-pop"
                   style={{
-                    background: `linear-gradient(135deg, ${positive ? 'rgba(34,197,94,0.10)' : 'rgba(248,113,113,0.10)'} 0%, rgba(123,57,252,0.06) 100%)`,
-                    border: `1px solid ${positive ? 'rgba(34,197,94,0.28)' : 'rgba(248,113,113,0.28)'}`,
+                    background: `linear-gradient(135deg, ${!hasTr ? 'rgba(154,167,184,0.08)' : positive ? 'rgba(34,197,94,0.10)' : 'rgba(248,113,113,0.10)'} 0%, rgba(123,57,252,0.06) 100%)`,
+                    border: `1px solid ${!hasTr ? 'rgba(154,167,184,0.28)' : positive ? 'rgba(34,197,94,0.28)' : 'rgba(248,113,113,0.28)'}`,
                   }}>
                   {/* glow décoratif */}
                   <div className="absolute pointer-events-none" style={{
                     top: '-40%', right: '-10%', width: '320px', height: '320px', borderRadius: '50%',
-                    background: `radial-gradient(circle, ${positive ? 'rgba(34,197,94,0.18)' : 'rgba(248,113,113,0.18)'} 0%, transparent 70%)`,
+                    background: `radial-gradient(circle, ${!hasTr ? 'rgba(154,167,184,0.16)' : positive ? 'rgba(34,197,94,0.18)' : 'rgba(248,113,113,0.18)'} 0%, transparent 70%)`,
                     filter: 'blur(20px)',
                   }} />
                   <div className="relative flex items-end justify-between flex-wrap gap-4">
@@ -676,14 +678,16 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
                       </div>
                       <p className={`font-bold leading-none ${positive ? 'hero-number-glow' : ''}`}
                         style={{ color: accent, fontFamily: 'Manrope', fontSize: 'clamp(3.2rem, 9vw, 5rem)', letterSpacing: '-0.03em' }}>
-                        {positive ? '+' : ''}{tr}<span style={{ fontSize: '0.4em', opacity: 0.7 }}>%</span>
+                        {hasTr
+                          ? <>{positive ? '+' : ''}{tr}<span style={{ fontSize: '0.4em', opacity: 0.7 }}>%</span></>
+                          : '—'}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs mb-1" style={{ color: '#667', fontFamily: 'Inter' }}>Performance globale</p>
                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold"
                         style={{ background: `${accent}1f`, color: accent, border: `1px solid ${accent}55`, fontFamily: 'Manrope' }}>
-                        {positive ? '▲ Gain' : '▼ Perte'}
+                        {!hasTr ? 'n/a' : positive ? '▲ Gain' : '▼ Perte'}
                       </span>
                     </div>
                   </div>
@@ -699,18 +703,22 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
               {[
                 {
                   label: 'Sharpe Ratio', Icon: TrendingUp, color: '#a78bfa',
+                  // Défensif (cf. lib/metrics.ts) : null/NaN en FALLBACK/ERROR → "—".
+                  has: Number.isFinite(result.metrics.sharpe_ratio),
                   value: `${result.metrics.sharpe_ratio}`,
                   info: 'Mesure si les gains valent le risque pris. Au-dessus de 1 = bon, négatif = mauvais.',
                   badge: sharpeBadge(result.metrics.sharpe_ratio),
                 },
                 {
                   label: 'Max Drawdown', Icon: TrendingDown, color: '#F87171',
+                  has: Number.isFinite(result.metrics.max_drawdown_pct),
                   value: `-${Math.abs(result.metrics.max_drawdown_pct)}%`,
                   info: 'La pire perte subie depuis un sommet. Plus c\'est petit (proche de 0), mieux c\'est.',
                   badge: drawdownBadge(result.metrics.max_drawdown_pct),
                 },
                 {
                   label: 'Win Rate', Icon: Target, color: '#06B6D4',
+                  has: Number.isFinite(result.metrics.win_rate_pct),
                   value: `${result.metrics.win_rate_pct}%`,
                   info: 'Le pourcentage de trades gagnants.',
                   badge: winRateBadge(result.metrics.win_rate_pct),
@@ -729,11 +737,11 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
                     <p className="text-xs font-medium" style={{ color: '#8a96a8', fontFamily: 'Inter' }}>{m.label}</p>
                     <InfoTooltip text={m.info} />
                   </div>
-                  <p className="font-bold mb-3" style={{ color: m.color, fontFamily: 'Manrope', fontSize: '2.1rem', letterSpacing: '-0.02em', textShadow: `0 0 12px ${m.color}55` }}>
-                    {m.value}
+                  <p className="font-bold mb-3" style={{ color: m.has ? m.color : '#9aa7b8', fontFamily: 'Manrope', fontSize: '2.1rem', letterSpacing: '-0.02em', textShadow: m.has ? `0 0 12px ${m.color}55` : 'none' }}>
+                    {m.has ? m.value : '—'}
                   </p>
-                  {/* badge qualitatif — plus parlant qu'une jauge normalisée arbitrairement */}
-                  <QualBadgeChip badge={m.badge} />
+                  {/* badge qualitatif — masqué si la métrique est absente (FALLBACK/ERROR) */}
+                  {m.has && <QualBadgeChip badge={m.badge} />}
                 </div>
                 );
               })}

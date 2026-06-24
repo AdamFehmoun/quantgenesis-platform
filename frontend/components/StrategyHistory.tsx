@@ -120,7 +120,7 @@ export default function StrategyHistory({ onLoad }: StrategyHistoryProps) {
                   DD <span style={{ color: '#F87171' }} className="font-medium">{s.metrics.max_drawdown_pct}%</span>
                 </span>
                 <span className="text-xs" style={{ color: 'rgba(244,243,248,0.5)', fontFamily: 'Inter' }}>
-                  Return <span style={{ color: '#22c55e' }} className="font-medium">+{s.metrics.total_return_pct}%</span>
+                  Return <span style={{ color: '#22c55e' }} className="font-medium">{s.metrics.total_return_pct >= 0 ? '+' : ''}{s.metrics.total_return_pct}%</span>
                 </span>
                 <span className="text-xs" style={{ color: 'rgba(244,243,248,0.5)', fontFamily: 'Inter' }}>
                   WR <span className="text-white font-medium">{s.metrics.win_rate_pct}%</span>
