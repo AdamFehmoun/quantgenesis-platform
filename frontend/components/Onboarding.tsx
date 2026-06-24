@@ -1,9 +1,11 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Compass, GraduationCap, Zap, TrendingUp, Repeat, Sparkles,
   Bitcoin, Gem, BarChart3, Shield, Scale, Flame, Calendar, Mountain,
   Coins, Rocket, ArrowRight, Send, RotateCcw, FlaskConical, Play,
+  MessageSquareText, Users, Eye, Lightbulb, ClipboardList, Boxes,
+  ShieldAlert, ShieldCheck, RefreshCw, ChevronRight,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -119,6 +121,23 @@ const QUICK_TESTS: { Icon: LucideIcon; label: string; intent: string }[] = [
   { Icon: Gem, label: 'Bollinger · ETH · modéré', intent: 'stratégie bollinger modérée moyen terme sur Ethereum' },
   { Icon: Bitcoin, label: 'RSI · BTC · agressif', intent: 'stratégie RSI agressive court terme sur Bitcoin' },
   { Icon: Bitcoin, label: 'RSI · BTC · prudent', intent: 'stratégie RSI prudente long terme sur Bitcoin' },
+];
+
+// ===== Section "Comment ça marche" — contenu 100% statique (support jury / TV).
+//       Affichage seul : n'appelle rien, ne touche pas au flux d'onboarding.
+const PIPELINE_STEPS: { n: string; Icon: LucideIcon; title: string; sub: string; accent: string }[] = [
+  { n: '01', Icon: MessageSquareText, title: 'Vous décrivez votre idée', sub: 'En langage naturel, en français. Pas une ligne de code à écrire.', accent: '#7b39fc' },
+  { n: '02', Icon: Users, title: '5 agents IA la transforment', sub: "Une équipe d'experts qui se challenge, du brief à la stratégie finale.", accent: '#7b39fc' },
+  { n: '03', Icon: FlaskConical, title: 'On génère et on teste', sub: 'Du vrai code Python, backtesté sur de vraies données dans un environnement isolé.', accent: '#06B6D4' },
+  { n: '04', Icon: Eye, title: 'Vous voyez tout', sub: 'Résultats, code, raisonnement des agents — en toute transparence.', accent: '#06B6D4' },
+];
+
+const PIPELINE_AGENTS: { Icon: LucideIcon; name: string; role: string; accent: string; guard?: boolean }[] = [
+  { Icon: Lightbulb, name: 'Brainstormer', role: "Comprend l'idée et juge la faisabilité", accent: '#a78bfa' },
+  { Icon: ClipboardList, name: 'Chef de Projet', role: 'Cadre la stratégie et le périmètre', accent: '#a78bfa' },
+  { Icon: Boxes, name: 'Architecte', role: 'Conçoit la stratégie sur-mesure, paramètres adaptés', accent: '#a78bfa' },
+  { Icon: ShieldAlert, name: 'Critique', role: 'Détecte biais et erreurs, renvoie corriger si besoin', accent: '#06B6D4', guard: true },
+  { Icon: ShieldCheck, name: 'Conformité', role: 'Trace chaque décision — conforme à l\'AI Act', accent: '#06B6D4' },
 ];
 
 const WELCOME_CARDS: { Icon: LucideIcon; title: string; sub: string; cta: string; level: Level; accent: string }[] = [
@@ -404,6 +423,108 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
               </div>
             </div>
           </div>
+
+          {/* ===== COMMENT ÇA MARCHE — section pédagogique statique (jury / TV).
+              Sous le CTA principal : à scroller pour découvrir, sans gêner le haut. ===== */}
+          <section className="relative z-10 max-w-6xl mx-auto px-6 pb-28">
+            <div className="text-center mb-12">
+              <span className="text-xs uppercase block mb-4" style={{ color: '#06B6D4', fontFamily: 'Manrope', letterSpacing: '0.32em' }}>
+                Comment ça marche
+              </span>
+              <h2 className="text-white" style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 'clamp(1.9rem, 3.6vw, 3rem)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+                De votre idée à une stratégie{' '}
+                <em style={{ fontFamily: 'Instrument Serif', fontStyle: 'italic', fontWeight: 400, background: 'linear-gradient(120deg,#b79bff,#22d3ee)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                  testée et tracée
+                </em>.
+              </h2>
+              <p className="mt-4 max-w-xl mx-auto" style={{ color: 'rgba(244,243,248,0.55)', fontFamily: 'Inter', fontSize: 'clamp(1rem,1.5vw,1.1rem)', lineHeight: 1.6 }}>
+                Quatre étapes, cinq agents IA qui se challengent. Aucune boîte noire.
+              </p>
+            </div>
+
+            {/* Frise des 4 grandes étapes */}
+            <div className="flex flex-col lg:flex-row items-stretch gap-4 lg:gap-2 mb-20">
+              {PIPELINE_STEPS.map((s, i) => {
+                const Icon = s.Icon;
+                return (
+                  <Fragment key={s.n}>
+                    <div className="onb-card flex-1 p-6 rounded-2xl flex flex-col transition-all"
+                      style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)', ['--onb-accent' as string]: s.accent }}>
+                      <div className="flex items-center justify-between mb-5">
+                        <span className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${s.accent}24`, border: `1px solid ${s.accent}4d` }}>
+                          <Icon size={24} color={s.accent} strokeWidth={2} />
+                        </span>
+                        <span style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: '1.6rem', color: s.accent, opacity: 0.35, letterSpacing: '-0.02em' }}>{s.n}</span>
+                      </div>
+                      <div className="font-bold text-white" style={{ fontFamily: 'Manrope', fontSize: 'clamp(1.05rem,1.5vw,1.2rem)', lineHeight: 1.25, letterSpacing: '-0.01em' }}>{s.title}</div>
+                      <div className="mt-2.5" style={{ color: 'rgba(244,243,248,0.58)', fontFamily: 'Inter', fontSize: '0.9rem', lineHeight: 1.5 }}>{s.sub}</div>
+                    </div>
+                    {i < PIPELINE_STEPS.length - 1 && (
+                      <div className="hidden lg:flex items-center justify-center flex-none" style={{ width: '28px' }}>
+                        <ChevronRight size={22} color="rgba(123,57,252,0.5)" strokeWidth={2.5} />
+                      </div>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </div>
+
+            {/* Zoom sur l'équipe : la chaîne d'agents qui se passe le relais */}
+            <div className="text-center mb-9">
+              <span className="inline-flex items-center gap-2 text-xs uppercase" style={{ color: 'rgba(244,243,248,0.5)', fontFamily: 'Manrope', letterSpacing: '0.2em' }}>
+                <Users size={14} color="#a78bfa" strokeWidth={2} /> L'équipe qui se passe le relais
+              </span>
+            </div>
+
+            <div className="flex flex-col lg:flex-row items-stretch gap-3 lg:gap-1.5">
+              {PIPELINE_AGENTS.map((a, i) => {
+                const Icon = a.Icon;
+                return (
+                  <Fragment key={a.name}>
+                    <div className="onb-card relative flex-1 p-5 rounded-2xl flex flex-col items-center text-center transition-all"
+                      style={{
+                        background: a.guard ? 'rgba(6,182,212,0.07)' : 'rgba(255,255,255,0.035)',
+                        border: a.guard ? '1px solid rgba(6,182,212,0.45)' : '1px solid rgba(255,255,255,0.08)',
+                        backdropFilter: 'blur(20px)',
+                        boxShadow: a.guard ? '0 0 28px rgba(6,182,212,0.18)' : undefined,
+                        ['--onb-accent' as string]: a.accent,
+                      }}>
+                      {a.guard && (
+                        <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 whitespace-nowrap rounded-full"
+                          style={{ padding: '4px 11px', background: 'linear-gradient(120deg,#06B6D4,#7b39fc)', color: '#fff', fontFamily: 'Manrope', fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', boxShadow: '0 4px 14px rgba(6,182,212,0.4)' }}>
+                          <RefreshCw size={11} strokeWidth={2.5} /> Garde-fou
+                        </span>
+                      )}
+                      <span className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${a.accent}24`, border: `1px solid ${a.accent}4d`, marginTop: a.guard ? '6px' : 0 }}>
+                        <Icon size={26} color={a.accent} strokeWidth={2} />
+                      </span>
+                      <div className="mt-4 font-bold text-white" style={{ fontFamily: 'Manrope', fontSize: '1.05rem', letterSpacing: '-0.01em' }}>{a.name}</div>
+                      <div className="mt-2" style={{ color: 'rgba(244,243,248,0.55)', fontFamily: 'Inter', fontSize: '0.82rem', lineHeight: 1.45 }}>{a.role}</div>
+                    </div>
+                    {i < PIPELINE_AGENTS.length - 1 && (
+                      <div className="hidden lg:flex items-center justify-center flex-none" style={{ width: '22px' }}>
+                        <ArrowRight size={18} color={i === 2 ? 'rgba(6,182,212,0.75)' : 'rgba(123,57,252,0.45)'} strokeWidth={2.5} />
+                      </div>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </div>
+
+            {/* La boucle du Critique — notre différenciateur, mis en avant. */}
+            <div className="mt-8 flex justify-center">
+              <div className="inline-flex items-center gap-3 rounded-2xl max-w-2xl"
+                style={{ padding: '14px 22px', background: 'rgba(6,182,212,0.06)', border: '1px solid rgba(6,182,212,0.28)', backdropFilter: 'blur(20px)' }}>
+                <span className="flex-none w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(6,182,212,0.16)', border: '1px solid rgba(6,182,212,0.4)' }}>
+                  <RefreshCw size={17} color="#06B6D4" strokeWidth={2.2} />
+                </span>
+                <p style={{ fontFamily: 'Inter', fontSize: 'clamp(0.85rem,1.3vw,0.95rem)', lineHeight: 1.5, color: 'rgba(244,243,248,0.75)' }}>
+                  <span className="text-white" style={{ fontWeight: 600, fontFamily: 'Manrope' }}>Le Critique boucle.</span>{' '}
+                  S'il détecte un biais ou une erreur, il renvoie l'Architecte corriger — jusqu'à ce que la stratégie tienne. C'est notre garde-fou.
+                </p>
+              </div>
+            </div>
+          </section>
         </>
       )}
 
