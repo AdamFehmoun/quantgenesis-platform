@@ -175,7 +175,7 @@ export default function Home() {
       {/* FOOTER */}
       <footer className="relative z-10 text-center py-10" style={{ borderTop: '1px solid rgba(123,57,252,0.1)' }}>
         <p className="text-xs" style={{ color: '#444', fontFamily: 'Inter' }}>
-          QuantClarity · ESIEE Paris 2025–2026 · Vos données ne quittent pas votre session · Propulsé par 6 agents IA
+          QuantClarity · ESIEE Paris 2025–2026 · Vos données ne quittent pas votre session · Propulsé par 5 agents IA
         </p>
       </footer>
 

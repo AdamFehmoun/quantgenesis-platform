@@ -6,9 +6,10 @@ import {
   Bitcoin, Gem, BarChart3, Shield, Scale, Flame, Calendar, Mountain,
   Coins, Rocket, ArrowRight, Send, RotateCcw, FlaskConical, Play,
   MessageSquareText, Users, Eye, Lightbulb, ClipboardList, Boxes,
-  ShieldAlert, ShieldCheck, RefreshCw, ChevronRight,
+  ShieldAlert, ShieldCheck, RefreshCw, ChevronRight, GitCompare,
   type LucideIcon,
 } from 'lucide-react';
+import Comparison from './Comparison';
 
 interface OnboardingProps {
   // Construit l'intent en langage naturel et le passe au flux EXISTANT.
@@ -165,6 +166,9 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
   const [noteDraft, setNoteDraft] = useState('');
   const [directDraft, setDirectDraft] = useState('');
   const [lit, setLit] = useState(false);
+  // Vue comparative « Prudent vs Agressif » — overlay SÉPARÉ, sans lien avec le
+  // flux de lancement (begin/onLaunch). N'altère rien si on l'ouvre/ferme.
+  const [showCompare, setShowCompare] = useState(false);
   // revealed=false → écran "éteint" (overlay sombre). Au tout premier chargement on
   // démarre éteint puis on allume ; aux remontages suivants on démarre déjà allumé.
   const [revealed, setRevealed] = useState(hasPoweredOn);
@@ -262,7 +266,7 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
 
   const recap = (list: Answer[]) => {
     const a = list;
-    const text = `Parfait ! Voici votre stratégie : « ${a[0].label} », profil ${a[2].label.toLowerCase()}, horizon ${a[3].label.toLowerCase()}, sur ${a[1].label}, avec ${a[4].label} de capital de test. On lance vos 6 experts ?`;
+    const text = `Parfait ! Voici votre stratégie : « ${a[0].label} », profil ${a[2].label.toLowerCase()}, horizon ${a[3].label.toLowerCase()}, sur ${a[1].label}, avec ${a[4].label} de capital de test. On lance vos 5 experts ?`;
     botSay(text, () => setDone(true));
   };
 
@@ -290,7 +294,7 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
     setDirectDraft('');
     setStep(null);
     botSay(
-      "C'est noté. J'ai traduit votre description en paramètres exploitables — vos 6 experts sont prêts à démarrer.",
+      "C'est noté. J'ai traduit votre description en paramètres exploitables — vos 5 experts sont prêts à démarrer.",
       () => setDone(true),
     );
   };
@@ -347,6 +351,9 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
         opacity: revealed ? 0 : 1,
         transition: 'opacity 1.6s cubic-bezier(.22,.61,.36,1)',
       }} />
+
+      {/* Vue comparative « Prudent vs Agressif » — overlay autonome (z=100). */}
+      {showCompare && <Comparison onClose={() => setShowCompare(false)} />}
 
       {/* Glows d'ambiance (cohérents avec page.tsx) */}
       <div className="fixed inset-0 z-0 pointer-events-none">
@@ -462,6 +469,15 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
                     );
                   })}
                 </div>
+
+                {/* Point d'entrée de la vue comparative — discret, sous les exemples. */}
+                <button onClick={() => setShowCompare(true)}
+                  className="qt-chip inline-flex items-center gap-2 rounded-full transition-all mt-4"
+                  style={{ padding: '9px 16px', background: 'rgba(123,57,252,0.08)', border: '1px solid rgba(123,57,252,0.3)', color: 'rgba(244,243,248,0.75)', fontFamily: 'Manrope', fontSize: '0.8rem', fontWeight: 600 }}>
+                  <GitCompare size={14} color="#a78bfa" strokeWidth={2} />
+                  <span>Comparer : prudent vs agressif</span>
+                  <ArrowRight size={12} color="#06B6D4" strokeWidth={2.5} className="qt-play" />
+                </button>
               </div>
             </div>
           </div>
@@ -658,7 +674,7 @@ export default function Onboarding({ onLaunch }: OnboardingProps) {
                 <button onClick={launch}
                   className="w-full inline-flex items-center justify-center gap-2.5 rounded-2xl text-white font-semibold transition-all hover:scale-[1.02]"
                   style={{ padding: '17px', background: 'linear-gradient(120deg,#7b39fc,#06B6D4)', fontFamily: 'Manrope', fontSize: '1.1rem', letterSpacing: '-0.01em', boxShadow: '0 12px 40px rgba(123,57,252,0.4)' }}>
-                  <Rocket size={20} strokeWidth={2} /> Lancer mes 6 experts IA
+                  <Rocket size={20} strokeWidth={2} /> Lancer mes 5 experts IA
                 </button>
               </div>
             )}

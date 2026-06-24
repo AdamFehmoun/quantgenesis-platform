@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
-  Brain, ClipboardList, Cog, Code2, Scale, Target,
+  Brain, ClipboardList, Cog, Scale, Target,
   Coins, TrendingUp, TrendingDown, AlertTriangle, Info,
   type LucideIcon,
 } from 'lucide-react';
@@ -28,7 +28,6 @@ const AGENTS: { name: string; role: string; Icon: LucideIcon; color: string }[] 
   { name: 'Brainstormer', role: 'Analyse de l\'intention et identification des marchés cibles...', Icon: Brain, color: '#7b39fc' },
   { name: 'ChefProjet', role: 'Définition des contraintes et architecture de la stratégie...', Icon: ClipboardList, color: '#6366f1' },
   { name: 'Architecte', role: 'Construction du modèle mathématique et des indicateurs...', Icon: Cog, color: '#0891B2' },
-  { name: 'Codeur', role: 'Génération du code Python VectorBT optimisé...', Icon: Code2, color: '#059669' },
   { name: 'Conformité', role: 'Vérification de la conformité réglementaire et du log AI Act (Article 12)...', Icon: Scale, color: '#D97706' },
   { name: 'Critique', role: 'Validation des résultats et détection des biais statistiques...', Icon: Target, color: '#DC2626' },
 ];
@@ -472,7 +471,7 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
       <div className="px-6 py-4 flex items-center gap-3"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(123,57,252,0.05)' }}>
         <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-        <span className="text-sm font-semibold text-white" style={{ fontFamily: 'Manrope' }}>Pipeline IA — 6 agents</span>
+        <span className="text-sm font-semibold text-white" style={{ fontFamily: 'Manrope' }}>Pipeline IA — 5 agents</span>
         <span className="ml-auto text-xs" style={{ color: '#555', fontFamily: 'Inter' }}>QuantClarity v1</span>
       </div>
       )}

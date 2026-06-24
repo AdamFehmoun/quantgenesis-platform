@@ -11,12 +11,11 @@ import type { LucideIcon } from 'lucide-react';
 export interface WaitingAgent { name: string; color: string; Icon: LucideIcon }
 interface WaitingProps { agents: WaitingAgent[] }
 
-// Phrase d'ambiance par agent (ordre = AGENTS de Chat).
+// Phrase d'ambiance par agent (ordre = AGENTS de Chat, 5 agents LLM).
 const PHRASES = [
   "J'évalue la faisabilité de votre idée…",
   'Je cadre les objectifs de la stratégie…',
   "Je conçois les signaux d'entrée et de sortie…",
-  'Je génère le code Python et prépare le backtest…',
   'Je vérifie la conformité (AI Act, Article 12)…',
   "J'audite la logique et je traque les biais…",
 ];
@@ -57,7 +56,7 @@ const PARTICLES = [
 ];
 
 export default function Waiting({ agents }: WaitingProps) {
-  const total = agents.length || 6;
+  const total = agents.length || 5;
   const [activeIndex, setActiveIndex] = useState(0);
   const [reveals, setReveals] = useState<{ id: number; text: string }[]>([]);
   const [elapsed, setElapsed] = useState(0); // secondes écoulées (pour la progression)
@@ -178,7 +177,7 @@ export default function Waiting({ agents }: WaitingProps) {
         </div>
       </div>
 
-      {/* Stepper des 6 agents — l'actif balaie en boucle (jamais tout "terminé" figé) */}
+      {/* Stepper des 5 agents — l'actif balaie en boucle (jamais tout "terminé" figé) */}
       <div className="relative z-10 px-8 md:px-14 pt-2 pb-10">
         <div className="relative flex justify-between items-start">
           <div className="absolute" style={{ top: '22px', left: '22px', right: '22px', height: '3px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px' }} />
