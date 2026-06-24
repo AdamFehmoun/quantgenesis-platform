@@ -245,9 +245,17 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
 
   // Révélation des résultats = max(fin d'animation, arrivée de la réponse/erreur).
   useEffect(() => {
-    if (!animationDone) return;
-    if (!result && !error) return; // MISS lent : on attend encore la réponse
-    setMessages((prev) => prev.map((m) => ({ ...m, done: true })));
+    if (!result && !error) return; // pas encore de réponse
+    // Avec l'écran d'attente : on révèle DÈS que la réponse arrive (cache 0,3s
+    // comme run 2min30) — l'attente s'auto-anime, aucune durée fixe à attendre,
+    // et son démontage coupe net l'animation. Sans écran d'attente : on conserve
+    // l'ancien comportement (attendre la fin de l'animation inline).
+    if (!USE_WAITING_SCREEN && !animationDone) return;
+    setMessages((prev) =>
+      USE_WAITING_SCREEN
+        ? AGENTS.map((agent) => ({ agent, done: true, text: agent.role, fullText: agent.role }))
+        : prev.map((m) => ({ ...m, done: true })),
+    );
     setRevealed(true);
     setLoading(false);
   }, [animationDone, result, error]);
@@ -325,8 +333,11 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
       }
     })();
 
-    // (b) Animation — rythme FIXE, totalement indépendante du réseau/cache.
+    // (b) Animation des agents. Avec l'écran d'attente actif, Waiting.tsx gère
+    // TOUTE l'animation en boucle continue → on ne lance pas l'animation inline
+    // (qui avait une durée fixe et figeait en fin de course).
     const animation = (async () => {
+      if (USE_WAITING_SCREEN) return;
       for (let i = 0; i < AGENTS.length; i++) {
         if (runIdRef.current !== myRun) return;
         if (errorRef.current) break; // une erreur API stoppe l'animation
@@ -352,22 +363,15 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
   const totalAgents = AGENTS.length;
   const doneCount = messages.filter((m) => m.done).length;
   const progressPct = revealed ? 100 : Math.min(Math.round((doneCount / totalAgents) * 100), 95);
-  // --- Écran d'attente plein écran (pendant un vrai run uniquement) ---
-  const activeMsgIndex = messages.findIndex((m) => !m.done);
-  const waitingActiveIndex = activeMsgIndex === -1 ? Math.min(doneCount, totalAgents - 1) : activeMsgIndex;
-  const waitingFinalizing = animationDone && !result && !error;
+  // --- Écran d'attente plein écran : monté tant qu'un vrai run est en cours,
+  // démonté dès la révélation (Waiting s'auto-anime et se coupe à son démontage).
   const showWaiting = USE_WAITING_SCREEN && loading && startedRealRunRef.current && !revealed;
   const examples = ['momentum Bitcoin drawdown 10%', 'ETH RSI 14 mean reversion', 'BTC/ETH ratio trading'];
 
   return (
     <>
     {showWaiting && (
-      <Waiting
-        agents={AGENTS.map((a) => ({ name: a.name, color: a.color, Icon: a.Icon }))}
-        activeIndex={waitingActiveIndex}
-        doneCount={doneCount}
-        finalizing={waitingFinalizing}
-      />
+      <Waiting agents={AGENTS.map((a) => ({ name: a.name, color: a.color, Icon: a.Icon }))} />
     )}
     <div className="rounded-2xl overflow-hidden"
       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)', boxShadow: '0 10px 40px rgba(0,0,0,0.35)' }}>
