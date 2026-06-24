@@ -16,13 +16,16 @@ export interface BacktestResult {
     sharpe_ratio: number;
     max_drawdown_pct: number;
     total_return_pct: number;
-    num_trades: number;
+    // Clé canonique backend (anciennement `num_trades`). `null` en FALLBACK.
+    trades_count: number | null;
     win_rate_pct: number;
   };
   backtest?: {
     status: string;
     error?: string;
     generated_code?: string;
+    // Fallback hérité : certaines réponses sandbox exposent encore `num_trades`.
+    num_trades?: number;
   };
   final_spec?: {
     architecture?: Record<string, unknown>;
@@ -31,6 +34,12 @@ export interface BacktestResult {
   compliance_log?: {
     compliance_record?: Record<string, unknown>;
     decision_trace?: Record<string, unknown>;
+    // Résumé pédagogique en français produit par l'agent Conformité.
+    oversight?: {
+      plain_language_summary?: string;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
   };
   pipeline?: {
     status: string;

@@ -6,7 +6,9 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { BacktestResult } from '../app/page';
+import { getTradesCount } from '../lib/metrics';
 import Waiting from './Waiting';
+import Explanation from './Explanation';
 
 // Écran d'attente plein écran (design « Attente ») pendant un vrai run.
 // Mettre à false pour revenir à l'animation inline des 6 agents (préservée).
@@ -78,11 +80,13 @@ function traceFor(r: BacktestResult, name: string): string | null {
   return String(val);
 }
 
-function getWarning(metrics: BacktestResult['metrics']): string | null {
+function getWarning(result: BacktestResult): string | null {
+  const metrics = result.metrics;
   if (!metrics) return null;
   if (metrics.sharpe_ratio > 5) return '⚠️ Sharpe > 5 — possible overfitting';
   if (metrics.max_drawdown_pct === 0) return '⚠️ Drawdown nul — vérifier les données';
-  if (metrics.num_trades < 5) return '⚠️ Trop peu de trades pour être significatif';
+  const trades = getTradesCount(result);
+  if (trades !== null && trades < 5) return '⚠️ Trop peu de trades pour être significatif';
   if (metrics.win_rate_pct > 90) return '⚠️ Win rate trop élevé — possible look-ahead bias';
   return null;
 }
@@ -126,7 +130,7 @@ function enrichAgent(name: string, r: BacktestResult): string | null {
         return null;
       }
       case 'Critique': {
-        const warning = getWarning(r.metrics);
+        const warning = getWarning(r);
         if (warning) return `${r.status || 'Validé'} — ${warning.replace(/^⚠️\s*/, '')}`;
         if (r.status) return `Verdict : ${r.status}.`;
         return null;
@@ -535,7 +539,7 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
                   {result.strategy_name || result.intent || 'Résultats'}
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: 'rgba(244,243,248,0.5)', fontFamily: 'Inter' }}>
-                  Backtest terminé · {result.metrics.num_trades} trades
+                  Backtest terminé · {getTradesCount(result) ?? 'n/a'} trades
                 </p>
               </div>
               <span className="text-xs px-3 py-1.5 rounded-full font-semibold"
@@ -591,6 +595,9 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
               );
             })()}
 
+            {/* EXPLICATION — résumé conformité + interprétation FR des métriques */}
+            <Explanation result={result} />
+
             {/* MÉTRIQUES SECONDAIRES — plus grandes, couleurs sémantiques, jauges */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
@@ -639,10 +646,10 @@ function ChatInner({ onResult }: ChatProps, ref: React.Ref<ChatHandle>) {
               })}
             </div>
 
-            {getWarning(result.metrics) && (
+            {getWarning(result) && (
               <div className="mt-4 p-3 rounded-xl text-xs"
                 style={{ background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.2)', color: '#FAC775', fontFamily: 'Inter' }}>
-                {getWarning(result.metrics)}
+                {getWarning(result)}
               </div>
             )}
           </div>
