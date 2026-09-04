@@ -130,7 +130,7 @@ Project currently in pre-release. Contribution guidelines in [`CONTRIBUTING.md`]
 
 ## License
 
-To be determined before public release (target: MIT).
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
