@@ -46,3 +46,7 @@ uv.lock
 .vercel
 .env*
 *.db
+
+# Build / test artifacts
+.coverage
+*.tsbuildinfo
