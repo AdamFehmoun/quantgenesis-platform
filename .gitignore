@@ -45,3 +45,4 @@ uv.lock
 *.Zone.Identifier
 .vercel
 .env*
+*.db
